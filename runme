@@ -1,0 +1,4 @@
+#!/bin/bash
+
+export PATH=$HOME/opt-test/bin:$PATH
+make all && ./a.out input.cs

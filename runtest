@@ -1,0 +1,11 @@
+#!/bin/bash
+
+cd regression-tests
+for i in *.cs ; do
+   echo "Running $i"
+   if ../a.out $i ; then
+      echo "$i:  [passed]"
+   else
+      echo "$i:  [failed]"
+   fi
+done

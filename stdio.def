@@ -1,0 +1,15 @@
+DEFINITION MODULE stdio ;
+
+(*
+    Title      : stdio
+    Author     : Gaius Mulley
+    System     : GNU Modula-2
+    Date       : Fri May  8 15:11:41 2020
+    Revision   : $Version$
+    Description: provides access to C stdio library.
+*)
+
+PROCEDURE fflush ;
+
+
+END stdio.

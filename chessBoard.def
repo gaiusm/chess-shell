@@ -1,0 +1,59 @@
+(* Copyright (C) 2015-2020 Free Software Foundation, Inc. *)
+(* This file is part of GNU Modula-2.
+
+GNU Modula-2 is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 3, or (at your option) any later
+version.
+
+GNU Modula-2 is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License along
+with gm2; see the file COPYING.  If not, write to the Free Software
+Foundation, 51 Franklin Street, Fifth Floor,
+Boston, MA 02110-1301, USA. *)
+
+DEFINITION MODULE chessBoard ;  (*!m2iso+gm2*)
+
+(*
+    Title      : chessBoard
+    Author     : Gaius Mulley
+    System     : GNU Modula-2
+    Date       : Mon Jul  6 21:49:46 2015
+    Revision   : $Version$
+    Description: provides the data structures to this chess program.
+*)
+
+FROM DynamicStrings IMPORT String ;
+FROM FIO IMPORT File ;
+
+
+PROCEDURE toggleDebug ;
+PROCEDURE getDebug () : BOOLEAN ;
+PROCEDURE toggleVerbose ;
+PROCEDURE toggleGroff ;
+PROCEDURE listMoves ;
+PROCEDURE listMicrocodeMoves ;
+PROCEDURE setMaxTime (secs: CARDINAL) ;
+PROCEDURE setMaxProcessors (processors: CARDINAL) ;
+PROCEDURE findMateIn (plies: CARDINAL) ;
+PROCEDURE whiteMove ;
+PROCEDURE blackMove ;
+PROCEDURE printBoard ;
+PROCEDURE loadBoard (n: CARDINAL) : BOOLEAN ;
+PROCEDURE makeNextMove ;
+PROCEDURE enterNextMove (s: String) ;
+PROCEDURE setOutputFile (f: File) ;
+PROCEDURE setInputFile (f: File) ;
+PROCEDURE inputBoard ;
+PROCEDURE inputBoardFlags ;
+PROCEDURE boardFlagHelp ;
+PROCEDURE environment ;
+PROCEDURE printStatus ;
+PROCEDURE searchAssert (s: String) ;
+
+
+END chessBoard.

@@ -1,0 +1,44 @@
+DEFINITION MODULE multiprocessor ;
+
+(*
+    Title      : multiprocessor
+    Author     : Gaius Mulley
+    System     : GNU Modula-2
+    Date       : Fri Apr 17 10:54:29 2020
+    Revision   : $Version$
+    Description: provides a very simple interface to process exit codes
+                 and some of the multiprocessor attributes of a GNU/Linux
+                 system.
+*)
+
+(*
+   waitChild - waits for any child process to terminate.  It returns the
+               pid of the child which has exited and also assigns result
+               to the exit status of the child.
+*)
+
+PROCEDURE waitChild (VAR result: INTEGER) : INTEGER ;
+
+
+(*
+   maxProcessors - return the number of processors available.
+*)
+
+PROCEDURE maxProcessors () : INTEGER ;
+
+
+(*
+   fork - standard libc fork.
+*)
+
+PROCEDURE fork () : INTEGER ;
+
+
+(*
+   rand - returns a random integer.
+*)
+
+PROCEDURE rand () : INTEGER ;
+
+
+END multiprocessor.

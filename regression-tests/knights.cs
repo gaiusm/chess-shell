@@ -1,0 +1,19 @@
+d
+#
+#  chess shell test input
+#
+h
+p
+l
+s
+........
+p.p.p.p.
+.N....N.
+........
+.n....n.
+.K......
+P.P.P.k.
+........
+p
+l
+x

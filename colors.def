@@ -1,0 +1,64 @@
+DEFINITION MODULE colors ;
+
+(*
+    Title      : colors
+    Author     : Gaius Mulley
+    System     : GNU Modula-2
+    Date       : Mon Apr 20 20:59:31 2020
+    Revision   : $Version$
+    Description: provides a simple ansi colour module for Modula-2.
+*)
+
+
+(*
+   enable - turn on/off production of color terminal escape strings
+            associated with each procedure.
+*)
+
+PROCEDURE enable (value: BOOLEAN) ;
+
+
+(*
+   emit an ansi escape code to turn on the colour associated with the
+   name of the procedure.
+*)
+
+PROCEDURE red ;
+PROCEDURE green ;
+PROCEDURE yellow ;
+PROCEDURE blue ;
+PROCEDURE magenta ;
+PROCEDURE cyan ;
+PROCEDURE white ;
+
+
+(*
+   reset - revert back to the default terminal colour.
+*)
+
+PROCEDURE reset ;
+
+
+(*
+   clear - clear the screen.
+*)
+
+PROCEDURE clear ;
+
+
+(*
+   home - move cursor to the top left.
+*)
+
+PROCEDURE home ;
+
+
+(*
+   pos - position cursor at location, x, y on the screen.
+         0, 0 is top left corner.
+*)
+
+PROCEDURE pos (x, y: CARDINAL) ;
+
+
+END colors.
