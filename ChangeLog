@@ -1,0 +1,5 @@
+2020-09-04      <gaiusmod2@gmail.com>
+
+	* autoconf complient.
+	* configure.ac:  (New file).
+	* Makefile.am:  (New file).

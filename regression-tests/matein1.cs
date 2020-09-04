@@ -24,9 +24,11 @@ j
 l
 # turn off time restriction
 t 0
-# explore 1 move ahead
+# explore 1 move ahead (2 half moves or plies)
 m 2
 l
 y
 n
+# assert that the win has been seen
+A +-
 x

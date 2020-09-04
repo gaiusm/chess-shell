@@ -17,10 +17,16 @@ r.......
 ........
 ........
 p
-c
-m 4
+# when this uses a parallel search the assert below fails
+c 1
+# c 12  # will fail!
+t 0
+m 5
+e
 j
 n
+# we should have seen the check mate now
+A +-
 n
 n
 n
