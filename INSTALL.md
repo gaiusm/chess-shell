@@ -8,21 +8,21 @@ following:
 Building the code
 =================
 
-   git clone https://github.com/gaiusm/chess-shell
-   mkdir build-chess
-   cd build-chess
-   ../chess-shell
-   ../chess-shell/configure
-   make
+git clone https://github.com/gaiusm/chess-shell
+mkdir build-chess
+cd build-chess
+../chess-shell
+../chess-shell/configure
+make
 
 
 Run regression tests
 ====================
 
-   make check
+make check
 
 
 Install chess shell
 ===================
 
-   make install
+make install
