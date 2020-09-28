@@ -1,3 +1,9 @@
+2020-09-28      <gaiusmod2@gmail.com>
+
+	* INSTALL.md:  (New file).
+	* README.md:  (added caveats about bugs).
+	* Makefile.am:  (introduced install rule).
+
 2020-09-04      <gaiusmod2@gmail.com>
 
 	* autoconf compliant.

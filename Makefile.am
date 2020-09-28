@@ -12,6 +12,9 @@ all-local:  chess-shell$(EXEEXT)
 chess-shell$(EXEEXT): $(MY_DEPS)
 	gm2 $(M2FLAGS) -I. -I$(srcdir) $(srcdir)/chessShell.mod -o $@
 
+install-exec-local:  chess-shell$(EXEEXT)
+	install -m 755 chess-shell$(EXEEXT) $(DESTDIR)$(prefix)/bin
+
 check: force
 	for cs in $(srcdir)/regression-tests/*.cs ; do \
            ./chess-shell $${cs} ; \
