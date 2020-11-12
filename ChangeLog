@@ -3,6 +3,8 @@
 	* chessPieces.py:  introduced ability to slide tiles
 	to different squares.
 	* bres.py:  (New file).
+	* chessPieces.py:  introduced ability to gradually fade tiles
+	either in or out of focus.
 
 2020-09-28      <gaiusmod2@gmail.com>
 
