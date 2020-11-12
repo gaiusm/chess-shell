@@ -1,3 +1,9 @@
+2020-11-12      <gaiusmod2@gmail.com>
+
+	* chessPieces.py:  introduced ability to slide tiles
+	to different squares.
+	* bres.py:  (New file).
+
 2020-09-28      <gaiusmod2@gmail.com>
 
 	* INSTALL.md:  (New file).
