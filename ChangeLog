@@ -1,3 +1,8 @@
+2020-11-13      <gaiusmod2@gmail.com>
+
+	* chessPieces.py:  corrected demo so that all pieces are
+	present of the initial board.
+
 2020-11-12      <gaiusmod2@gmail.com>
 
 	* chessPieces.py:  introduced ability to slide tiles

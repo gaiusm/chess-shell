@@ -97,9 +97,9 @@ def chess_white (name):
 def blank_square (display, pixels, square):
     x, y = square_coordinate[square]
     if (ord (square[0]) + ord (square[1])) % 2 == 0:
-        pygame.draw.rect (display, light_square, (x, y, pixels, pixels), 0)
-    else:
         pygame.draw.rect (display, dark_square, (x, y, pixels, pixels), 0)
+    else:
+        pygame.draw.rect (display, light_square, (x, y, pixels, pixels), 0)
 
 
 def blankBoard (display, size):
@@ -388,7 +388,7 @@ def main ():
 
     gameDisplay.fill (touchguipalate.black)
     gameDisplay = blankBoard (gameDisplay, 0.1)
-    createBoard (0.1, "rnbkqbnrpppppppp................................PPPPPPPP.NBKQBNR")
+    createBoard (0.1, "rnbkqbnrpppppppp................................PPPPPPPPRNBKQBNR")
     controls = buttons ()
     forms = all_pieces () + controls
     touchgui.select (forms, event_test, finished)
@@ -398,14 +398,13 @@ def main ():
     # blank_square (gameDisplay, touchgui.unitY (0.1), "h1")
     test_fade ("h1")
     move_combination ([["e2", "e4"]])
-    """
     move_combination ([["b1", "c3"]])
     move_combination ([["d2", "d4"]])
     move_combination ([["c1", "g5"]])
     move_combination ([["d1", "b1"], ["a1", "c1"]])
     move_combination ([["d7", "d5"]])
+    test_fade ("d5")
     move_combination ([["e4", "d5"]])
-    """
     forms = all_pieces () + controls
     touchgui.select (forms, event_test)
 
