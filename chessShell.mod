@@ -19,7 +19,7 @@ Boston, MA 02110-1301, USA. *)
 MODULE chessShell ;
 
 FROM SYSTEM IMPORT ADDRESS ;
-FROM FIO IMPORT File, StdIn, Close ;
+FROM FIO IMPORT File, StdIn, Close, EOF ;
 FROM stdio IMPORT fflush ;
 FROM PushBackInput IMPORT Open, GetCh, PutStr, Error ;
 FROM libc IMPORT printf, exit ;
@@ -40,7 +40,9 @@ IMPORT SArgs, colors ;
 
 
 VAR
-   debug: BOOLEAN ;
+   debug,
+   fileprompt,
+   stdinprompt:  BOOLEAN ;
 
 
 (*
@@ -83,6 +85,11 @@ BEGIN
    printf ("z               : revert previous move\n");
    printf ("A [=] [+-] [-+] : assert move search discovers forced draw,\n");
    printf ("                  forced white win and forced black win\n");
+   printf ("P inputfile     : push inputfile and read shell commands.\n");
+   printf ("                  Input reverts back to the previous file.\n");
+   printf ("E echostring    : echostring to the output file or stream.\n");
+   printf ("S               : toggle prompt when stdin is used as input.\n");
+   printf ("F               : toggle prompt when a file is used as input.\n");
 END displayHelp ;
 
 
@@ -290,6 +297,23 @@ END processOutputFile ;
 
 
 (*
+   pushInputFile -
+*)
+
+PROCEDURE pushInputFile (s: String) ;
+VAR
+   i: String ;
+BEGIN
+   IF GetArg (s, 1, i)
+   THEN
+      sourceFrom (i)
+   ELSE
+      printf ("a filename is expected after 'P'\n")
+   END
+END pushInputFile ;
+
+
+(*
    limitProcessors -
 *)
 
@@ -337,6 +361,45 @@ BEGIN
    END ;
    i := KillString (i)
 END boardFlags ;
+
+
+(*
+   echoString -
+*)
+
+PROCEDURE echoString (s: String) ;
+VAR
+   i: String ;
+BEGIN
+   IF GetArg (s, 1, i)
+   THEN
+      printf ("%s\n", i) ;
+      i := KillString (i)
+   END
+END echoString ;
+
+
+(*
+   toggleBoolean -
+*)
+
+PROCEDURE toggleBoolean (VAR b: BOOLEAN; name: ARRAY OF CHAR) ;
+VAR
+   s: String ;
+   a: ADDRESS ;
+BEGIN
+   s := InitString (name) ;
+   a := string (s) ;
+   IF b
+   THEN
+      printf ("%s is now off\n", a) ;
+      b := FALSE
+   ELSE
+      printf ("%s is now on\n", a) ;
+      b := TRUE
+   END ;
+   s := KillString (s)
+END toggleBoolean ;
 
 
 (*
@@ -448,6 +511,18 @@ BEGIN
          ELSIF EqualArray (w, 'A')
          THEN
             searchAssert (s)
+         ELSIF EqualArray (w, 'P')
+         THEN
+            pushInputFile (s)
+         ELSIF EqualArray (w, 'E')
+         THEN
+            echoString (s)
+         ELSIF EqualArray (w, 'S')
+         THEN
+            toggleBoolean (stdinprompt, "stdin prompt")
+         ELSIF EqualArray (w, 'F')
+         THEN
+            toggleBoolean (fileprompt, "file prompt")
          ELSE
             a := string (s) ;
             printf ("unknown command: %s\n", a);
@@ -470,11 +545,15 @@ VAR
    o: ADDRESS ;
 BEGIN
    REPEAT
-      printf ("@ ") ; fflush ;
+      IF ((inputFile = StdIn) AND stdinprompt) OR ((inputFile # StdIn) AND fileprompt)
+      THEN
+         printf ("@ ")
+      END ;
+      fflush ;
       s := readS () ;
       o := string (s) ;
-      printf ("@ %s\n", o);
-   UNTIL NOT processString (s)
+      (* printf ("@ %s\n", o); *)
+   UNTIL EOF (inputFile) OR (NOT processString (s))
 END shell ;
 
 
@@ -505,6 +584,8 @@ VAR
    inputFile    : File ;
    colourEnabled: BOOLEAN ;
 BEGIN
+   fileprompt := FALSE ;
+   stdinprompt := FALSE ;
    colourEnabled := FALSE ;
    colors.enable (colourEnabled) ;
    init

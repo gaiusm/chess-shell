@@ -4806,6 +4806,7 @@ BEGIN
    i := fd.movePtr ;
    WHILE i < movePtr DO
       getSrcDestColour (currentBoard, moves[i].cons, src, dest, turn) ;
+      (* printf ("%d, %d  ==  %d, %d\n", from, to, src, dest); *)
       IF (src = from) AND (dest = to)
       THEN
          mix := i ;

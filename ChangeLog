@@ -1,3 +1,10 @@
+2020-11-17      <gaiusmod2@gmail.com>
+
+	* chessShell.mod:  added P, E, S, F commands.
+	* chessShell.py:  (shell) class added togther with pexpect
+	example.
+	* examples/rooks.cs:  (New file).
+
 2020-11-13      <gaiusmod2@gmail.com>
 
 	* chessPieces.py:  corrected demo so that all pieces are
