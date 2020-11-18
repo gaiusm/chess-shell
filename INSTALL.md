@@ -16,6 +16,13 @@ cd build-chess
 make
 
 
+Run chess shell with the GUI
+============================
+
+python3 chessPieces.py ../chess-shell/examples/initial.cs
+python3 chessPieces.py ../chess-shell/examples/rooks.cs
+
+
 Run regression tests
 ====================
 
