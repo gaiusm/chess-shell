@@ -16,6 +16,8 @@
 	(move_combination) has an extra parameter final_position which
 	is used to determine whether the move was a taking move.  Add
 	fade animation if the move takes another piece.
+	* INSTALL.md:  updated instructions with brief details about
+	invoking the GUI.
 
 2020-11-17      <gaiusmod2@gmail.com>
 

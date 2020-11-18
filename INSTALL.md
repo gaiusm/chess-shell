@@ -11,7 +11,6 @@ Building the code
 git clone https://github.com/gaiusm/chess-shell
 mkdir build-chess
 cd build-chess
-../chess-shell
 ../chess-shell/configure
 make
 
@@ -19,8 +18,8 @@ make
 Run chess shell with the GUI
 ============================
 
-python3 chessPieces.py ../chess-shell/examples/initial.cs
-python3 chessPieces.py ../chess-shell/examples/rooks.cs
+python3 ../chess-shell/chessPieces.py ../chess-shell/examples/initial.cs
+python3 ../chess-shell/chessPieces.py ../chess-shell/examples/rooks.cs
 
 
 Run regression tests
