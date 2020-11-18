@@ -1,3 +1,17 @@
+2020-11-18      <gaiusmod2@gmail.com>
+
+	* chessPieces.py:  can now read in an initial position from
+	a text file and it can use this to configure the gui board.
+	* chessBoard.mod:  corrected the initial placement of pieces.
+	Also corrected the capitalization of pieces for black/white.
+	Changed casting squares as king/queen have changed position.
+	* chessPieces.py:  large number of changes which implement
+	basic movement (non taking only) and coordination between
+	chessShell/movement/touchgui.
+	* chessShell.py:  commented out the invocation of the
+	test function.
+	* examples/initial.cs:  (New file).
+
 2020-11-17      <gaiusmod2@gmail.com>
 
 	* chessShell.mod:  added P, E, S, F commands.

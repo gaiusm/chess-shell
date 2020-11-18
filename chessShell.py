@@ -83,4 +83,4 @@ def testShell ():
     print ("The Moves", s.get_legal_moves ())
 
 
-testShell ()
+# testShell ()

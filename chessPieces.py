@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import chess, os, chess.svg, bres, PIL
+import sys, getopt, chessShell
+
 from PIL import Image
 
 import pygame, touchgui, touchguipalate, touchguiconf
@@ -10,31 +12,62 @@ from pygame.locals import *
 # display_width, display_height = 1920, 1080
 display_width, display_height = 800, 600
 display_width, display_height = 1920, 1080
-full_screen = False
 full_screen = True
+full_screen = False
 toggle_delay = 250
 light_square = (166, 124, 54)
 dark_square  = (76, 47, 0)
+high_dark_square  = (25, 25, 25)
+high_light_square  = (51, 51, 51)
 black = (0, 0, 0)
 movement_pieces = []
 fading_pieces = []
 is_finished = False
 max_delay = 10
 max_velocity = max_delay
+square_size = 0.1
+move_src_square = None
+move_dest_square = None
 
 
 def myquit (name = None, tap = None):
-    print ("quit called")
     pygame.display.update ()  # need this to see the button pressed before we quit
     pygame.time.delay (toggle_delay * 2) #  delay program so we see the button change
     pygame.quit ()  #  now shutdown pygame
     quit ()  #  and shutdown python
 
 
-def pressed (name, tap = None):
-    global is_finished
+def pos2key (pos):
+    return "%c%c" % (int (pos[0] / touchgui.unitY (square_size)) + ord ('a') -1,
+                     (8 - int (pos[1] / touchgui.unitY (square_size))) + ord ('1'))
+
+
+def square_pressed (name, tap = None):
+    global move_src_square, shell, is_finished
+
+    print (name, "square_pressed")
+    pos = pygame.mouse.get_pos ()
+    key = pos2key (pos)
+    print (key)
+    #
+    #  check for src move click, we can only have clicked on a piece which
+    #  can be moved as we have frozen all other piece tiles.
+    #
+    assert (pieces[key] != None)
+    move_src_square = key
     is_finished = True
-    print (name, "pressed")
+
+
+#
+#  dest_selected - the destination move square has been pressed.
+#
+
+def dest_selected (name, tap = None):
+    global move_dest_square, is_finished
+    pos = pygame.mouse.get_pos ()
+    move_dest_square = pos2key (pos)
+    print ("dest square selected =", move_dest_square)
+    is_finished = True
 
 
 def finished ():
@@ -102,8 +135,8 @@ def blank_square (display, pixels, square):
         pygame.draw.rect (display, light_square, (x, y, pixels, pixels), 0)
 
 
-def blankBoard (display, size):
-    pixels = touchgui.unitY (size)
+def blankBoard (display):
+    pixels = touchgui.unitY (square_size)
     for y in range (8):
         count = y % 2
         for x in range (8):
@@ -140,14 +173,14 @@ def createBoard (size, board_layout):
         elif p.upper () == p:
             tile = touchgui.image_tile (chess_white (p),
                                         (x+1) * pixels, (y+1) * pixels,
-                                        pixels, pixels, pressed)
+                                        pixels, pixels, square_pressed)
             tile.set_background (None)
             static_pieces += [tile]
             pieces[key] = tile
         else:
             tile = touchgui.image_tile (chess_black (p),
                                         (x+1) * pixels, (y+1) * pixels,
-                                        pixels, pixels, pressed)
+                                        pixels, pixels, square_pressed)
             tile.set_background (None)
             pieces[key] = tile
             static_pieces += [tile]
@@ -339,6 +372,90 @@ def create_movement (tile, way_points, pos_accel, neg_accel, max_velocity):
 def all_pieces ():
     return static_pieces # + get_moving_pieces ()
 
+#
+#  freeze all tiles
+#
+
+def freeze_tiles (board_pieces):
+    for tile in board_pieces:
+        tile.set_frozen ()
+
+
+#
+#  activate all tiles
+#
+
+def activate_tiles (tiles):
+    for tile in tiles:
+        tile.set_active ()
+
+
+def freeze_unlisted (board_pieces, legal_moves):
+    freeze_tiles (board_pieces)
+    #
+    #  unfreeze pieces which can be moved
+    #
+    for move in legal_moves:
+        if move == "o-o-o":
+            pass
+        if move == "o-o":
+            pass
+        if move == "O-O-O":
+            pass
+        if move == "O-O":
+            pass
+        key = move[1].lower () + move[2]
+        pieces[key].set_active ()
+    return board_pieces
+
+
+#
+#  get_dest_squares - return a list of keys to which the selected piece can move.
+#
+
+def get_dest_squares (key, legal_moves):
+    dest = []
+    for move in legal_moves:
+        if move == "o-o-o":
+            pass
+        elif move == "o-o":
+            pass
+        elif move == "O-O-O":
+            pass
+        elif move == "O-O":
+            pass
+        else:
+            src_key = move[1].lower () + move[2]
+            if src_key == key:
+                dest_key = move[4].lower () + move[5]
+                dest += [dest_key]
+    return dest
+
+
+#
+#  highlight_dest_squares -
+#
+
+def highlight_dest_squares (gameDisplay, keylist):
+    gameDisplay = blankBoard (gameDisplay)
+    pixels = touchgui.unitY (square_size)
+    dest = []  #  destination square tiles
+    for key in keylist:
+        x, y = square_coordinate[key]
+        if (ord (key[0]) + ord (key[1])) % 2 == 0:
+            dest += [touchgui.image_tile ([touchgui.color_tile (dark_square, pixels, pixels),
+                                           touchgui.color_tile (high_dark_square, pixels, pixels),
+                                           touchgui.color_tile (high_light_square, pixels, pixels),
+                                           touchgui.color_tile (dark_square, pixels, pixels)],
+                                          x, y, pixels, pixels, dest_selected)]
+        else:
+            dest += [touchgui.image_tile ([touchgui.color_tile (light_square, pixels, pixels),
+                                           touchgui.color_tile (high_light_square, pixels, pixels),
+                                           touchgui.color_tile (high_dark_square, pixels, pixels),
+                                           touchgui.color_tile (light_square, pixels, pixels)],
+                                          x, y, pixels, pixels, dest_selected)]
+    return gameDisplay, dest
+
 
 #
 #  move_combination - moves all pieces in the move_list.  Note it cannot be used
@@ -352,7 +469,7 @@ def move_combination (move_list):
                          [square_coordinate[src], square_coordinate[dest]],
                          1, 1, max_velocity)
     while not movement_finished ():
-        gameDisplay = blankBoard (gameDisplay, 0.1)
+        gameDisplay = blankBoard (gameDisplay)
         update_movement ()
         is_finished = False
         forms = all_pieces () + controls
@@ -365,6 +482,49 @@ def move_combination (move_list):
         del pieces[src]
 
 
+def is_match (move, src_key, dest_key):
+    if move == src_key:
+        # castling short special case
+        return True
+    print ("move = ", move, src_key, dest_key)
+    if len (move) > 4:
+        move = move.lower ()
+        src_key = src_key.lower ()
+        dest_key = dest_key.lower ()
+        return (move[1:3] == src_key) and (move[4:6] == dest_key)
+    return False
+
+
+def move_index (legal_moves, move_src_square, move_dest_square):
+    for idx, move in enumerate (legal_moves):
+        if is_match (move, move_src_square, move_dest_square):
+            return idx
+    return None
+
+
+def perform_move (legal_moves, move_src_square, move_dest_square):
+    global shell
+    idx = move_index (legal_moves, move_src_square, move_dest_square)
+    if idx is None:
+        print ("perform_move could not implement the move between",
+               move_src_square, move_dest_square)
+        quit ()
+    shell.make_move (idx)
+    if move_src_square == "o-o":
+        pass
+    elif move_src_square == "o-o-o":
+        pass
+    elif move_src_square == "O-O":
+        pass
+    elif move_src_square == "O-O-O":
+        pass
+    else:
+        print (move_src_square, move_dest_square)
+        move_src_square = move_src_square.lower ()
+        move_dest_square = move_dest_square.lower ()
+        move_combination ([[move_src_square, move_dest_square]])
+
+
 def test_fade (position):
     global movement_pieces, pieces, static_pieces
     movement_pieces += [fade (pieces[position], 255, 0, -1)]
@@ -375,8 +535,31 @@ def test_fade (position):
     del pieces[position]
 
 
+def usage (code):
+    print ("pychessshell [-d][-h]")
+    sys.exit (code)
+
+def process_options ():
+    global debugging
+    optlist, l = getopt.getopt(sys.argv[1:], ":dh")
+    print("optlist =", optlist)
+    print("l =", l)
+    for opt in optlist:
+        if opt[0] == "-h":
+            usage (0)
+        elif opt[0] == "-d":
+            debugging = True
+    if l == []:
+        return None
+    return l[0]
+
+
 def main ():
-    global gameDisplay, controls
+    global gameDisplay, controls, shell, is_finished, move_src_square, move_dest_square
+
+    filename = process_options ()
+    shell = chessShell.shell (filename)
+    board = shell.get_board ()
     pygame.init ()
     if full_screen:
         gameDisplay = pygame.display.set_mode ((display_width, display_height), FULLSCREEN)
@@ -387,11 +570,39 @@ def main ():
     touchgui.set_display (gameDisplay, display_width, display_height)
 
     gameDisplay.fill (touchguipalate.black)
-    gameDisplay = blankBoard (gameDisplay, 0.1)
-    createBoard (0.1, "rnbkqbnrpppppppp................................PPPPPPPPRNBKQBNR")
+    gameDisplay = blankBoard (gameDisplay)
+    createBoard (square_size, board)
     controls = buttons ()
-    forms = all_pieces () + controls
-    touchgui.select (forms, event_test, finished)
+    legal_moves = shell.get_legal_moves ()
+    forms = freeze_unlisted (all_pieces (), legal_moves) + controls
+    while True:
+        is_finished = False
+        touchgui.select (forms, event_test, finished)
+        if move_src_square is None:
+            print ("move_src_square is None")
+            forms = freeze_unlisted (all_pieces (), legal_moves) + controls
+        elif move_dest_square is None:
+            print ("move_dest_square is None")
+            dest_keys = get_dest_squares (move_src_square, legal_moves)
+            gameDisplay, dest = highlight_dest_squares (gameDisplay, dest_keys)
+            forms = dest + freeze_unlisted (all_pieces (), legal_moves) + controls
+            pieces[move_src_square].set_frozen ()       #  and freeze the chosen piece
+        else:
+            print ("reached completed move")
+            # perform the move
+            print ("values =", move_src_square, move_dest_square)
+            perform_move (legal_moves, move_src_square, move_dest_square)
+            move_src_square = None
+            move_dest_square = None
+            gameDisplay = blankBoard (gameDisplay)  # redraw the board to remove highlighted squares
+            legal_moves = shell.get_legal_moves ()
+            forms = freeze_unlisted (all_pieces (), legal_moves) + controls
+
+
+
+"""
+    quit ()
+
     #
     #
     #
@@ -406,7 +617,7 @@ def main ():
     test_fade ("d5")
     move_combination ([["e4", "d5"]])
     forms = all_pieces () + controls
-    touchgui.select (forms, event_test)
+"""
 
 
 main ()

@@ -2916,13 +2916,13 @@ BEGIN
    ELSE
       IF isKing (b, c, src)
       THEN
-         IF src - 2 = dest
-         THEN
-            (* king side castle.  *)
-            printf ("%c-%c", colourChar (c, 'o'), colourChar (c, 'o'))
-         ELSIF src + 3 = dest
+         IF src - 3 = dest
          THEN
             (* queen side castle.  *)
+            printf ("%c-%c", colourChar (c, 'o'), colourChar (c, 'o'))
+         ELSIF src + 2 = dest
+         THEN
+            (* king side castle.  *)
             printf ("%c-%c-%c", colourChar (c, 'o'), colourChar (c, 'o'), colourChar (c, 'o'))
          ELSE
             (* normal move.  *)
@@ -2997,9 +2997,9 @@ PROCEDURE colourChar (c: Colour; p: CHAR) : CHAR ;
 BEGIN
    IF c = white
    THEN
-      RETURN p
-   ELSE
       RETURN CAP (p)
+   ELSE
+      RETURN p
    END
 END colourChar ;
 
@@ -3274,8 +3274,8 @@ BEGIN
    END ;
    addRook (b, white, 0, 0) ;
    addRook (b, white, 7, 0) ;
-   addQueen (b, white, 4, 0) ;
-   addKing (b, white, 3, 0) ;
+   addQueen (b, white, 3, 0) ;
+   addKing (b, white, 4, 0) ;
 
    (* black pieces.  *)
    addKnight (b, black, 1, BoardSize-1) ;
@@ -3287,8 +3287,8 @@ BEGIN
    END ;
    addRook (b, black, 0, BoardSize-1) ;
    addRook (b, black, 7, BoardSize-1) ;
-   addQueen (b, black, 4, BoardSize-1) ;
-   addKing (b, black, 3, BoardSize-1) ;
+   addQueen (b, black, 3, BoardSize-1) ;
+   addKing (b, black, 4, BoardSize-1) ;
 
    (* and both sides can castle in the future.  *)
    b.cflags := cFlags {bks, bqs, wks, wqs}
