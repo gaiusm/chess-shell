@@ -11,6 +11,11 @@
 	* chessShell.py:  commented out the invocation of the
 	test function.
 	* examples/initial.cs:  (New file).
+	* examples/taking.cs:  (New file).
+	* chessPieces.py:  (blankBoard) renamed (blank_board).
+	(move_combination) has an extra parameter final_position which
+	is used to determine whether the move was a taking move.  Add
+	fade animation if the move takes another piece.
 
 2020-11-17      <gaiusmod2@gmail.com>
 

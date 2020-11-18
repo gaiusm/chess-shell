@@ -1,12 +1,11 @@
 #
-#
-#  chess shell test input 2 rooks
+#  chess shell test taking move
 #
 c 1
 s
 ......k.
 ........
-........
+.q......
 .R...K..
 .....R..
 ........

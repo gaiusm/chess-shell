@@ -130,12 +130,12 @@ def chess_white (name):
 def blank_square (display, pixels, square):
     x, y = square_coordinate[square]
     if (ord (square[0]) + ord (square[1])) % 2 == 0:
-        pygame.draw.rect (display, dark_square, (x, y, pixels, pixels), 0)
+        pygame.draw.rect (display, high_dark_square, (x, y, pixels, pixels), 0)
     else:
-        pygame.draw.rect (display, light_square, (x, y, pixels, pixels), 0)
+        pygame.draw.rect (display, high_light_square, (x, y, pixels, pixels), 0)
 
 
-def blankBoard (display):
+def blank_board (display):
     pixels = touchgui.unitY (square_size)
     for y in range (8):
         count = y % 2
@@ -437,7 +437,7 @@ def get_dest_squares (key, legal_moves):
 #
 
 def highlight_dest_squares (gameDisplay, keylist):
-    gameDisplay = blankBoard (gameDisplay)
+    gameDisplay = blank_board (gameDisplay)
     pixels = touchgui.unitY (square_size)
     dest = []  #  destination square tiles
     for key in keylist:
@@ -462,14 +462,21 @@ def highlight_dest_squares (gameDisplay, keylist):
 #                     to take a piece or add/replace a piece.
 #
 
-def move_combination (move_list):
+def move_combination (move_list, final_position):
     global gameDisplay, controls, pieces
     for src, dest in move_list:
         create_movement (pieces[src],
                          [square_coordinate[src], square_coordinate[dest]],
                          1, 1, max_velocity)
+    taking = final_position in pieces
+    if taking:
+        remove_piece (final_position)
     while not movement_finished ():
-        gameDisplay = blankBoard (gameDisplay)
+        gameDisplay = blank_board (gameDisplay)
+        if taking:
+            # taking move
+            pass
+            # blank_square (gameDisplay, touchgui.unitY (square_size), final_position)
         update_movement ()
         is_finished = False
         forms = all_pieces () + controls
@@ -522,10 +529,15 @@ def perform_move (legal_moves, move_src_square, move_dest_square):
         print (move_src_square, move_dest_square)
         move_src_square = move_src_square.lower ()
         move_dest_square = move_dest_square.lower ()
-        move_combination ([[move_src_square, move_dest_square]])
+        move_combination ([[move_src_square, move_dest_square]], move_dest_square)
 
 
-def test_fade (position):
+#
+#  remove_piece - fades out a piece at position.  It adds the fading
+#                 animation to the movement_pieces list.
+#
+
+def remove_piece (position):
     global movement_pieces, pieces, static_pieces
     movement_pieces += [fade (pieces[position], 255, 0, -1)]
     #
@@ -536,7 +548,7 @@ def test_fade (position):
 
 
 def usage (code):
-    print ("pychessshell [-d][-h]")
+    print ("pychessshell [-d][-h] filename")
     sys.exit (code)
 
 def process_options ():
@@ -570,7 +582,7 @@ def main ():
     touchgui.set_display (gameDisplay, display_width, display_height)
 
     gameDisplay.fill (touchguipalate.black)
-    gameDisplay = blankBoard (gameDisplay)
+    gameDisplay = blank_board (gameDisplay)
     createBoard (square_size, board)
     controls = buttons ()
     legal_moves = shell.get_legal_moves ()
@@ -594,7 +606,7 @@ def main ():
             perform_move (legal_moves, move_src_square, move_dest_square)
             move_src_square = None
             move_dest_square = None
-            gameDisplay = blankBoard (gameDisplay)  # redraw the board to remove highlighted squares
+            gameDisplay = blank_board (gameDisplay)  # redraw the board to remove highlighted squares
             legal_moves = shell.get_legal_moves ()
             forms = freeze_unlisted (all_pieces (), legal_moves) + controls
 
