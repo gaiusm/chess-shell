@@ -599,9 +599,12 @@ def computer_make_move (legal_moves):
     global shell
 
     move = shell.computer_move ()
-    print ("computer made a move:", move)
-    move_src_square, move_dest_square = split_keys (move)
-    computer_move (legal_moves, move_src_square, move_dest_square)
+    if move is None:
+        quit ()
+    else:
+        print ("computer made a move:", move)
+        move_src_square, move_dest_square = split_keys (move)
+        computer_move (legal_moves, move_src_square, move_dest_square)
 
 
 def main ():

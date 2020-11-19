@@ -9,6 +9,8 @@
 	(main) call human_move instead of perform_move.
 	* chessShell.py:  (start_text)  New function.  (computer_move)
 	New method.
+	* chessPieces.py:  (computer_make_move) detect end of game
+	and quit.
 
 2020-11-18      <gaiusmod2@gmail.com>
 
