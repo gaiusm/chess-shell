@@ -1,3 +1,15 @@
+2020-11-19      <gaiusmod2@gmail.com>
+
+	* basic human/computer interaction implemented using pexpect.
+	* chessBoard.mod:  (readSquare) flipped capitalization for
+	white and black.
+	* chessPieces.py:  (debugging) set False initially.
+	(computer_move) New function.  (human_move) modified print.
+	(split_keys) New function.  (computer_make_move)  New function.
+	(main) call human_move instead of perform_move.
+	* chessShell.py:  (start_text)  New function.  (computer_move)
+	New method.
+
 2020-11-18      <gaiusmod2@gmail.com>
 
 	* chessPieces.py:  can now read in an initial position from

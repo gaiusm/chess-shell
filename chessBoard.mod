@@ -4522,24 +4522,23 @@ VAR
 BEGIN
    skipSpacesAndExtra ;
    ch := GetCh (inputFile) ;
-   printf ("r, c = %d, %d  = %c\n", r, c, ch) ;
    CASE ch OF
 
    '.':  |
-   'p':  addPawn (b, white, c, r) |
-   'n':  addKnight (b, white, c, r) |
-   'b':  addBishop (b, white, c, r) |
-   'r':  addRook (b, white, c, r) |
-   'q':  addQueen (b, white, c, r) |
-   'k':  addKing (b, white, c, r) |
-   'P':  addPawn (b, black, c, r) |
-   'N':  addKnight (b, black, c, r) |
-   'B':  addBishop (b, black, c, r) |
-   'R':  addRook (b, black, c, r) |
-   'Q':  addQueen (b, black, c, r) |
-   'K':  addKing (b, black, c, r) |
-   'e':  addEnpassent (b, white, c, r) |
-   'E':  addEnpassent (b, black, c, r)
+   'p':  addPawn (b, black, c, r) |
+   'n':  addKnight (b, black, c, r) |
+   'b':  addBishop (b, black, c, r) |
+   'r':  addRook (b, black, c, r) |
+   'q':  addQueen (b, black, c, r) |
+   'k':  addKing (b, black, c, r) |
+   'P':  addPawn (b, white, c, r) |
+   'N':  addKnight (b, white, c, r) |
+   'B':  addBishop (b, white, c, r) |
+   'R':  addRook (b, white, c, r) |
+   'Q':  addQueen (b, white, c, r) |
+   'K':  addKing (b, white, c, r) |
+   'e':  addEnpassent (b, black, c, r) |
+   'E':  addEnpassent (b, white, c, r)
 
    ELSE
       printf ("unknown character in board description '%c'\n", ch)

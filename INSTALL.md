@@ -18,7 +18,6 @@ make
 Run chess shell with the GUI
 ============================
 
-python3 ../chess-shell/chessPieces.py ../chess-shell/examples/initial.cs
 python3 ../chess-shell/chessPieces.py ../chess-shell/examples/rooks.cs
 
 

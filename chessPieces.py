@@ -28,6 +28,7 @@ max_velocity = max_delay
 square_size = 0.1
 move_src_square = None
 move_dest_square = None
+debugging = False
 
 
 def myquit (name = None, tap = None):
@@ -509,11 +510,28 @@ def move_index (legal_moves, move_src_square, move_dest_square):
     return None
 
 
-def perform_move (legal_moves, move_src_square, move_dest_square):
+def computer_move (legal_moves, move_src_square, move_dest_square):
+    global shell
+    if move_src_square == "o-o":
+        pass
+    elif move_src_square == "o-o-o":
+        pass
+    elif move_src_square == "O-O":
+        pass
+    elif move_src_square == "O-O-O":
+        pass
+    else:
+        print (move_src_square, move_dest_square)
+        move_src_square = move_src_square.lower ()
+        move_dest_square = move_dest_square.lower ()
+        move_combination ([[move_src_square, move_dest_square]], move_dest_square)
+
+
+def human_move (legal_moves, move_src_square, move_dest_square):
     global shell
     idx = move_index (legal_moves, move_src_square, move_dest_square)
     if idx is None:
-        print ("perform_move could not implement the move between",
+        print ("human_move could not implement the move between",
                move_src_square, move_dest_square)
         quit ()
     shell.make_move (idx)
@@ -547,6 +565,17 @@ def remove_piece (position):
     del pieces[position]
 
 
+#
+#  split_keys - returns two key squares defined by move.
+#
+
+def split_keys (move):
+    if len (move) > 4:
+        return move[1:3].lower (), move[4:6].lower ()
+    # --fixme-- handle castling
+    return None
+
+
 def usage (code):
     print ("pychessshell [-d][-h] filename")
     sys.exit (code)
@@ -564,6 +593,15 @@ def process_options ():
     if l == []:
         return None
     return l[0]
+
+
+def computer_make_move (legal_moves):
+    global shell
+
+    move = shell.computer_move ()
+    print ("computer made a move:", move)
+    move_src_square, move_dest_square = split_keys (move)
+    computer_move (legal_moves, move_src_square, move_dest_square)
 
 
 def main ():
@@ -603,33 +641,15 @@ def main ():
             print ("reached completed move")
             # perform the move
             print ("values =", move_src_square, move_dest_square)
-            perform_move (legal_moves, move_src_square, move_dest_square)
+            human_move (legal_moves, move_src_square, move_dest_square)
             move_src_square = None
             move_dest_square = None
             gameDisplay = blank_board (gameDisplay)  # redraw the board to remove highlighted squares
             legal_moves = shell.get_legal_moves ()
             forms = freeze_unlisted (all_pieces (), legal_moves) + controls
-
-
-
-"""
-    quit ()
-
-    #
-    #
-    #
-    # blank_square (gameDisplay, touchgui.unitY (0.1), "h1")
-    test_fade ("h1")
-    move_combination ([["e2", "e4"]])
-    move_combination ([["b1", "c3"]])
-    move_combination ([["d2", "d4"]])
-    move_combination ([["c1", "g5"]])
-    move_combination ([["d1", "b1"], ["a1", "c1"]])
-    move_combination ([["d7", "d5"]])
-    test_fade ("d5")
-    move_combination ([["e4", "d5"]])
-    forms = all_pieces () + controls
-"""
+            computer_make_move (legal_moves)
+            legal_moves = shell.get_legal_moves ()
+            forms = freeze_unlisted (all_pieces (), legal_moves) + controls
 
 
 main ()

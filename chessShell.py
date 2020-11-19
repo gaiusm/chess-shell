@@ -6,6 +6,12 @@ import pexpect, sys
 debugging = True
 
 
+def start_text (line, sequence):
+    if len (line) > len (sequence):
+        return line[:len (sequence)] == sequence
+    return False
+
+
 class shell:
     def __init__ (self, filename = None):
         self.child = pexpect.spawn ('./chess-shell')
@@ -43,7 +49,6 @@ class shell:
         self._get_prompt ()
         moves = self.child.before
         text = moves.decode("utf-8")
-        print ("text = ", text)
         list_of_moves = []
         count = 0
         for t in text.split ('\n'):
@@ -58,14 +63,29 @@ class shell:
                             list_of_moves += [i]
         return list_of_moves
     def make_move (self, move_number):
-        self._help ()
         self._get_prompt ()
         self.child.sendline ('k %d' % (move_number))
     def _help (self):
         self._get_prompt ()
         self.child.sendline ('h')
         self.child.expect ([pexpect.TIMEOUT, 'P inputfile'])
-        print ("seen help")
+    def computer_move (self):
+        self._get_prompt ()
+        self.child.sendline ('n')
+        self._get_prompt ()
+        text = self.child.before
+        text = text.decode("utf-8")
+        for t in text.split ("\n"):
+            t = t.lstrip ()
+            t = t.rstrip ()
+            if start_text (t, "whites move: "):
+                self._get_prompt ()
+                return t.split ()[2]
+            if start_text (t, "blacks move: "):
+                self._get_prompt ()
+                return t.split ()[2]
+        self._get_prompt ()
+        return None
 
 
 def display (message, board):
