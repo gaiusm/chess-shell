@@ -7,6 +7,8 @@ debugging = True
 
 
 def start_text (line, sequence):
+    if line == sequence:
+        return True
     if len (line) > len (sequence):
         return line[:len (sequence)] == sequence
     return False
@@ -14,7 +16,7 @@ def start_text (line, sequence):
 
 class shell:
     def __init__ (self, filename = None):
-        self.child = pexpect.spawn ('./chess-shell')
+        self.child = pexpect.spawn ('./chess-shell', timeout=180, maxread=100000)
         self._sync_no = 0
         if debugging:
             self.child.logfile = sys.stdout.buffer
@@ -65,6 +67,16 @@ class shell:
     def make_move (self, move_number):
         self._get_prompt ()
         self.child.sendline ('k %d' % (move_number))
+        self._get_prompt ()
+        moves = self.child.before
+        text = moves.decode("utf-8")
+        for t in text.split ('\n'):
+            t = t.lstrip ()
+            t = t.rstrip ()
+            if start_text (t, "the game ends with"):
+                return t
+        return "continue"
+
     def _help (self):
         self._get_prompt ()
         self.child.sendline ('h')
@@ -73,19 +85,27 @@ class shell:
         self._get_prompt ()
         self.child.sendline ('n')
         self._get_prompt ()
-        text = self.child.before
-        text = text.decode("utf-8")
-        for t in text.split ("\n"):
-            t = t.lstrip ()
-            t = t.rstrip ()
-            if start_text (t, "whites move: "):
-                self._get_prompt ()
-                return t.split ()[2]
-            if start_text (t, "blacks move: "):
-                self._get_prompt ()
-                return t.split ()[2]
-        self._get_prompt ()
-        return None
+        status = "continue"
+        move = None
+        while move is None:
+            text = self.child.before
+            text = text.decode("utf-8")
+            print ("move text")
+            print (text)
+            print ("end move text")
+            for t in text.split ("\n"):
+                t = t.lstrip ()
+                t = t.rstrip ()
+                if (start_text (t, "the game ends with") or
+                    start_text (t, "a win for black") or
+                    start_text (t, "a win for white")):
+                    status = t
+                elif start_text (t, "whites move: "):
+                    move = t.split ()[2]
+                elif start_text (t, "blacks move: "):
+                    move = t.split ()[2]
+            self._get_prompt ()
+        return move, status
 
 
 def display (message, board):

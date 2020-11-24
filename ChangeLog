@@ -1,3 +1,11 @@
+2020-11-24      <gaiusmod2@gmail.com>
+
+	* chessShell.py:  (shell::make_move) return status of game.
+	(shell::computer_move) return status of game.
+	* chessPieces.py:  first cut of allowing user to decide who
+	plays black and white (computer/human).  (king_fade) New
+	function which is called when check mate occurs.
+
 2020-11-19      <gaiusmod2@gmail.com>
 
 	* basic human/computer interaction implemented using pexpect.

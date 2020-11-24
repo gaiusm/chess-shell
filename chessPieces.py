@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import chess, os, chess.svg, bres, PIL
+import chess, os, chess.svg, bres, PIL, time
 import sys, getopt, chessShell
 
 from PIL import Image
@@ -12,13 +12,15 @@ from pygame.locals import *
 # display_width, display_height = 1920, 1080
 display_width, display_height = 800, 600
 display_width, display_height = 1920, 1080
-full_screen = True
 full_screen = False
+full_screen = True
 toggle_delay = 250
 light_square = (166, 124, 54)
 dark_square  = (76, 47, 0)
 high_dark_square  = (25, 25, 25)
 high_light_square  = (51, 51, 51)
+bright_dark_square  = (145, 145, 145)
+bright_light_square  = (175, 175, 175)
 black = (0, 0, 0)
 movement_pieces = []
 fading_pieces = []
@@ -29,6 +31,9 @@ square_size = 0.1
 move_src_square = None
 move_dest_square = None
 debugging = False
+player_black, player_white = range (2)
+player = ["computer", "human"]
+player_turn = None
 
 
 def myquit (name = None, tap = None):
@@ -41,6 +46,12 @@ def myquit (name = None, tap = None):
 def pos2key (pos):
     return "%c%c" % (int (pos[0] / touchgui.unitY (square_size)) + ord ('a') -1,
                      (8 - int (pos[1] / touchgui.unitY (square_size))) + ord ('1'))
+
+
+def index2key (i):
+    x = i % 8
+    y = 7 - int (i / 8)
+    return "%c%c" % (chr (ord ('a') + x), chr (ord ('1') + y))
 
 
 def square_pressed (name, tap = None):
@@ -85,12 +96,52 @@ def button_list (name):
             touchgui.image_gui (imagedir ("images/PNG/White/2x/%s.png") % (name)),
             touchgui.image_gui (imagedir ("images/PNG/White/2x/%s.png") % (name)).white2rgb (.1, .2, .4)]
 
+
+#
+#  fn_white_player - flip white between human/computer.
+#
+
+def fn_white_player (name = None, tap = None):
+    global player, is_finished
+    is_finished = True
+    if player[player_white] == "computer":
+        player[player_white] = "human"
+    else:
+        player[player_white] = "computer"
+
+#
+#  fn_black_player - flip black between human/computer.
+#
+
+def fn_black_player (name = None, tap = None):
+    global player, is_finished
+    is_finished = True
+    if player[player_black] == "computer":
+        player[player_black] = "human"
+    else:
+        player[player_black] = "computer"
+
+
 #
 #  buttons - create two buttons and return them as a list.
 #
 
 def buttons ():
-    return [touchgui.image_tile (button_list ("power"),
+    if player[player_black] == "human":
+        black = button_list ("singleplayer")
+    else:
+        black = button_list ("gear")
+    if player[player_white] == "human":
+        white = button_list ("singleplayer")
+    else:
+        white = button_list ("gear")
+    return [touchgui.image_tile (white,
+                                 touchgui.posX (0.8), touchgui.posY (0.9),
+                                 100, 100, fn_white_player),
+            touchgui.image_tile (black,
+                                 touchgui.posX (0.85), touchgui.posY (0.9),
+                                 100, 100, fn_black_player),
+            touchgui.image_tile (button_list ("power"),
                                  touchgui.posX (0.95), touchgui.posY (1.0),
                                  100, 100, myquit)]
 
@@ -128,6 +179,16 @@ def chess_white (name):
             touchgui.image_gui ("chessimages/%s.png" % (name)).white2rgb (.1, .35, .6, .9)]
 
 
+def chess_red (name):
+    # [frozen, active, activated, pressed].
+    name = name.upper ()
+    # use the white piece and colour it appropriately.
+    return [touchgui.image_gui ("chessimages/%s.png" % (name)).white2rgb (.65, .1, .2, .9),
+            touchgui.image_gui ("chessimages/%s.png" % (name)).white2rgb (.65, .1, .2, .9),
+            touchgui.image_gui ("chessimages/%s.png" % (name)).white2rgb (.65, .1, .2, .9),
+            touchgui.image_gui ("chessimages/%s.png" % (name)).white2rgb (.65, .1, .2, .9)]
+
+
 def blank_square (display, pixels, square):
     x, y = square_coordinate[square]
     if (ord (square[0]) + ord (square[1])) % 2 == 0:
@@ -142,18 +203,21 @@ def blank_board (display):
         count = y % 2
         for x in range (8):
             if count % 2 == 0:
-                pygame.draw.rect (display, light_square, ((x+1) * pixels, (y+1)*pixels,
+                pygame.draw.rect (display, light_square, ((x+1) * pixels, (y+1) * pixels,
                                                           pixels, pixels), 0)
             else:
-                pygame.draw.rect (display, dark_square, ((x+1) * pixels, (y+1)*pixels,
+                pygame.draw.rect (display, dark_square, ((x+1) * pixels, (y+1) * pixels,
                                                          pixels, pixels), 0)
             count += 1
     return display
 
 
 def event_test (event):
-    if (event.type == KEYDOWN) and (event.key == K_ESCAPE):
-        myquit (None)
+    if event.type == KEYDOWN:
+        if event.key == K_ESCAPE:
+            myquit (None)
+        elif event.key == K_f:
+            pygame.display.toggle_fullscreen ()
 
 
 def createBoard (size, board_layout):
@@ -185,6 +249,7 @@ def createBoard (size, board_layout):
             tile.set_background (None)
             pieces[key] = tile
             static_pieces += [tile]
+
 
 #
 #  sum_distance - return the total number of points which will be plotted by
@@ -279,7 +344,7 @@ class fade:
         self.end = end
         self.increment = increment
         self.delay = delay
-        self.delta_delay = 0
+        self.delta_delay = delay
         self.is_finished = False
         self.original_images = tile.get_images ()
         self.pil_image_orig = to_pil (self._get_image ().convert_alpha ())
@@ -292,7 +357,6 @@ class fade:
         if self.start == self.end:
             self.is_finished = True
         self._apply_alpha (self.start)
-        self.delta_delay = self.delay
         if self.increment > 0:
             self.start = min (self.start + self.increment, self.end)
         else:
@@ -446,13 +510,13 @@ def highlight_dest_squares (gameDisplay, keylist):
         if (ord (key[0]) + ord (key[1])) % 2 == 0:
             dest += [touchgui.image_tile ([touchgui.color_tile (dark_square, pixels, pixels),
                                            touchgui.color_tile (high_dark_square, pixels, pixels),
-                                           touchgui.color_tile (high_light_square, pixels, pixels),
+                                           touchgui.color_tile (bright_dark_square, pixels, pixels),
                                            touchgui.color_tile (dark_square, pixels, pixels)],
                                           x, y, pixels, pixels, dest_selected)]
         else:
             dest += [touchgui.image_tile ([touchgui.color_tile (light_square, pixels, pixels),
                                            touchgui.color_tile (high_light_square, pixels, pixels),
-                                           touchgui.color_tile (high_dark_square, pixels, pixels),
+                                           touchgui.color_tile (bright_light_square, pixels, pixels),
                                            touchgui.color_tile (light_square, pixels, pixels)],
                                           x, y, pixels, pixels, dest_selected)]
     return gameDisplay, dest
@@ -480,7 +544,7 @@ def move_combination (move_list, final_position):
             # blank_square (gameDisplay, touchgui.unitY (square_size), final_position)
         update_movement ()
         is_finished = False
-        forms = all_pieces () + controls
+        forms = all_pieces () + buttons ()
         touchgui.select (forms, event_test, finished, 10)
     #
     #  now update the data structures
@@ -526,6 +590,65 @@ def computer_move (legal_moves, move_src_square, move_dest_square):
         move_dest_square = move_dest_square.lower ()
         move_combination ([[move_src_square, move_dest_square]], move_dest_square)
 
+def find_king (status):
+    if ((status == "the game ends with a loss for black") or
+        (status == "the game ends with a win for white") or
+        (status == "a loss for black") or
+        (status == "a win for white")):
+        board_str = shell.get_board ()
+        return index2key (board_str.index ("k")), "k"
+    elif ((status == "the game ends with a loss for white") or
+          (status == "the game ends with a win for black") or
+          (status == "a loss for white") or
+          (status == "a win for black")):
+        board_str = shell.get_board ()
+        return index2key (board_str.index ("K")), "K"
+    return None, None
+
+
+def fade_king (move, status):
+    global movement_pieces, pieces, static_pieces, gameDisplay
+    if status != "continue":
+        print ("ending with", status)
+        position, symbol = find_king (status)
+        print ("position", position, symbol)
+        if position != None:
+            pieces[position].set_images (chess_red (symbol))
+            movement_pieces += [fade (pieces[position], 255, 0, -1)]
+            #
+            #  now update the data structures
+            #
+            movement_pieces += [fade (pieces[position], 0, 255, 1, 256)]
+            movement_pieces += [fade (pieces[position], 255, 0, -1, 512)]
+            # pieces[position] = red
+            del pieces[position]
+        if move is None:
+            while not movement_finished ():
+                gameDisplay = blank_board (gameDisplay)
+                update_movement ()
+                is_finished = False
+                forms = all_pieces () + controls
+                touchgui.select (forms, event_test, finished, 10)
+
+
+def animate_move (idx, move_src_square, move_dest_square):
+    status = shell.make_move (idx)
+    print ("status =", status)
+    fade_king (False, status)
+    if move_src_square == "o-o":
+        move_combination ([["e8", "g8"], ["h8", "f8"]], "g8")
+    elif move_src_square == "o-o-o":
+        move_combination ([["e1", "c1"], ["a1", "d1"]], "c1")
+    elif move_src_square == "O-O":
+        move_combination ([["e1", "g1"], ["h1", "f1"]], "g1")
+    elif move_src_square == "O-O-O":
+        move_combination ([["e1", "c1"], ["a1", "d1"]], "c1")
+    else:
+        print (move_src_square, move_dest_square)
+        move_src_square = move_src_square.lower ()
+        move_dest_square = move_dest_square.lower ()
+        move_combination ([[move_src_square, move_dest_square]], move_dest_square)
+
 
 def human_move (legal_moves, move_src_square, move_dest_square):
     global shell
@@ -534,20 +657,7 @@ def human_move (legal_moves, move_src_square, move_dest_square):
         print ("human_move could not implement the move between",
                move_src_square, move_dest_square)
         quit ()
-    shell.make_move (idx)
-    if move_src_square == "o-o":
-        pass
-    elif move_src_square == "o-o-o":
-        pass
-    elif move_src_square == "O-O":
-        pass
-    elif move_src_square == "O-O-O":
-        pass
-    else:
-        print (move_src_square, move_dest_square)
-        move_src_square = move_src_square.lower ()
-        move_dest_square = move_dest_square.lower ()
-        move_combination ([[move_src_square, move_dest_square]], move_dest_square)
+    animate_move (idx, move_src_square, move_dest_square)
 
 
 #
@@ -598,12 +708,22 @@ def process_options ():
 def computer_make_move (legal_moves):
     global shell
 
-    move = shell.computer_move ()
+    move, status = shell.computer_move ()
+    print ("move =", move, "status =", status)
+    fade_king (move, status)
     if move is None:
+        time.sleep (5)
         quit ()
+    move_src_square, move_dest_square = split_keys (move)
+    if move_src_square == "o-o":
+        move_combination ([["e8", "g8"], ["h8", "f8"]], "g8")
+    elif move_src_square == "o-o-o":
+        move_combination ([["e1", "c1"], ["a1", "d1"]], "c1")
+    elif move_src_square == "O-O":
+        move_combination ([["e1", "g1"], ["h1", "f1"]], "g1")
+    elif move_src_square == "O-O-O":
+        move_combination ([["e1", "c1"], ["a1", "d1"]], "c1")
     else:
-        print ("computer made a move:", move)
-        move_src_square, move_dest_square = split_keys (move)
         computer_move (legal_moves, move_src_square, move_dest_square)
 
 
@@ -625,20 +745,20 @@ def main ():
     gameDisplay.fill (touchguipalate.black)
     gameDisplay = blank_board (gameDisplay)
     createBoard (square_size, board)
-    controls = buttons ()
     legal_moves = shell.get_legal_moves ()
-    forms = freeze_unlisted (all_pieces (), legal_moves) + controls
+    forms = freeze_unlisted (all_pieces (), legal_moves) + buttons ()
+    player_turn = player_white
     while True:
         is_finished = False
         touchgui.select (forms, event_test, finished)
         if move_src_square is None:
             print ("move_src_square is None")
-            forms = freeze_unlisted (all_pieces (), legal_moves) + controls
+            forms = freeze_unlisted (all_pieces (), legal_moves) +  buttons ()
         elif move_dest_square is None:
             print ("move_dest_square is None")
             dest_keys = get_dest_squares (move_src_square, legal_moves)
             gameDisplay, dest = highlight_dest_squares (gameDisplay, dest_keys)
-            forms = dest + freeze_unlisted (all_pieces (), legal_moves) + controls
+            forms = dest + freeze_unlisted (all_pieces (), legal_moves) +  buttons ()
             pieces[move_src_square].set_frozen ()       #  and freeze the chosen piece
         else:
             print ("reached completed move")
@@ -648,11 +768,14 @@ def main ():
             move_src_square = None
             move_dest_square = None
             gameDisplay = blank_board (gameDisplay)  # redraw the board to remove highlighted squares
+            player_turn = 1 - player_turn
+            if player[player_turn] == "computer":
+                legal_moves = shell.get_legal_moves ()
+                forms = freeze_unlisted (all_pieces (), legal_moves) +  buttons ()
+                computer_make_move (legal_moves)
+                player_turn = 1 - player_turn
             legal_moves = shell.get_legal_moves ()
-            forms = freeze_unlisted (all_pieces (), legal_moves) + controls
-            computer_make_move (legal_moves)
-            legal_moves = shell.get_legal_moves ()
-            forms = freeze_unlisted (all_pieces (), legal_moves) + controls
+            forms = freeze_unlisted (all_pieces (), legal_moves) +  buttons ()
 
 
 main ()
