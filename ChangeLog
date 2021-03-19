@@ -1,3 +1,9 @@
+2020-03-19      <gaiusmod2@gmail.com>
+
+	* regression-tests:  all tests now use standard capitals
+	for white and lower case for black.
+	* added tux icon for processor.
+
 2020-11-24      <gaiusmod2@gmail.com>
 
 	* chessShell.py:  (shell::make_move) return status of game.

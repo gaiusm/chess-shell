@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import chess, os, chess.svg, bres, PIL, time
+import chess, os, chess.svg, bres, PIL, time, multiprocessing
 import sys, getopt, chessShell
 
 from PIL import Image
@@ -122,11 +122,7 @@ def fn_black_player (name = None, tap = None):
         player[player_black] = "computer"
 
 
-#
-#  buttons - create two buttons and return them as a list.
-#
-
-def buttons ():
+def button_controls ():
     if player[player_black] == "human":
         black = button_list ("singleplayer")
     else:
@@ -145,6 +141,39 @@ def buttons ():
                                  touchgui.posX (0.95), touchgui.posY (1.0),
                                  100, 100, myquit)]
 
+def format_grid (nprocs):
+    if nprocs == 1:
+        return 1
+    for row in [3, 4]:
+        if int (nprocs / row) * row == nprocs:
+            return [row, int (nprocs / row)]
+    return [nprocs, 1]
+
+
+#
+#  processor_icons - returns a grid of processors.
+#
+
+def processor_icons ():
+    n = multiprocessing.cpu_count ()
+    rows, columns = format_grid (n)
+    unit = touchgui.unitY (0.1)
+    procs = []
+    for row in range (rows):
+        for column in range (columns):
+            procs += [touchgui.image_tile (images_red ("tux"),
+                                           touchgui.posX (0.55) + unit * row, touchgui.posY (0.8) + unit * column,
+                                           100, 100)]
+    return procs
+
+
+#
+#  buttons - create two buttons and return them as a list.
+#
+
+def buttons ():
+    return button_controls () + processor_icons ()
+
 
 def makePiece (name, size):
     os.system ("mkdir -p chessimages")
@@ -155,9 +184,16 @@ def makePiece (name, size):
     os.system ('convert -background none chessimages/%s.svg chessimages/%s.png' % (name, name))
 
 
+def make_png (name, size):
+    sys_command = 'convert -background none -resize %dx%d chessimages/%s.svg chessimages/%s.png' % (size, size, name, name)
+    print (sys_command)
+    os.system (sys_command)
+
+
 def makePieces (size):
     for p in "prnbkqPRNBKQ":
         makePiece (p, size)
+    make_png ("tux", size)
 
 #             touchgui.image_gui ("chessimages/%s-white.png" % (name)).white2rgb (.5, .4, .3, .9)]
 
@@ -183,6 +219,12 @@ def chess_red (name):
     # [frozen, active, activated, pressed].
     name = name.upper ()
     # use the white piece and colour it appropriately.
+    return images_red (name)
+
+
+def images_red (name):
+    # [frozen, active, activated, pressed].
+    # assume the image is white and colour it appropriately.
     return [touchgui.image_gui ("chessimages/%s.png" % (name)).white2rgb (.65, .1, .2, .9),
             touchgui.image_gui ("chessimages/%s.png" % (name)).white2rgb (.65, .1, .2, .9),
             touchgui.image_gui ("chessimages/%s.png" % (name)).white2rgb (.65, .1, .2, .9),

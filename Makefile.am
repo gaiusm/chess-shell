@@ -10,14 +10,22 @@ M2FLAGS=$(OPT) $(CHECK) -fextended-opaque -flibs=pim,iso
 all-local:  chess-shell$(EXEEXT)
 
 chess-shell$(EXEEXT): $(MY_DEPS)
+	mkdir -p chessimages
+	cp $(srcdir)/chessimages/tux.svg chessimages/tux.svg
 	gm2 $(M2FLAGS) -I. -I$(srcdir) $(srcdir)/chessShell.mod -o $@
 
 install-exec-local:  chess-shell$(EXEEXT)
 	install -m 755 chess-shell$(EXEEXT) $(DESTDIR)$(prefix)/bin
 
 check: force
+	rm -f chess.log
+	touch chess.log
 	for cs in $(srcdir)/regression-tests/*.cs ; do \
-           ./chess-shell $${cs} ; \
+           if ./chess-shell $${cs} >> chess.log ; then \
+		echo "$${cs}: passed" ; \
+	   else \
+		echo "$${cs}: failed" ; \
+           fi ; \
         done
 
 .mod.o:

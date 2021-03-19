@@ -1,17 +1,17 @@
 d
 #
 #  chess shell test input for a mate in 3 moves
-#  or 6 half moves
+#  or 5 half moves (plies)
 #
 h
 c
 p
 l
 s
-......K.
+......k.
 ........
 ........
-r......k
+R......K
 ........
 ........
 ........
