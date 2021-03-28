@@ -11,13 +11,10 @@ DEFINITION MODULE multiprocessor ;
                  system.
 *)
 
-(*
-   waitChild - waits for any child process to terminate.  It returns the
-               pid of the child which has exited and also assigns result
-               to the exit status of the child.
-*)
+FROM SYSTEM IMPORT ADDRESS ;
 
-PROCEDURE waitChild (VAR result: INTEGER) : INTEGER ;
+TYPE
+   SEMAPHORE = ADDRESS ;
 
 
 (*
@@ -39,6 +36,53 @@ PROCEDURE fork () : INTEGER ;
 *)
 
 PROCEDURE rand () : INTEGER ;
+
+
+(*
+   initSem - initialise and return a POSIX semaphore.
+*)
+
+PROCEDURE initSem (value: CARDINAL) : SEMAPHORE ;
+
+
+(*
+   killSem - deallocate a POSIX semaphore.
+*)
+
+PROCEDURE killSem (sem: SEMAPHORE) ;
+
+
+(*
+   wait -
+*)
+
+PROCEDURE wait (sem: SEMAPHORE) ;
+
+
+(*
+   signal -
+*)
+
+PROCEDURE signal (sem: SEMAPHORE) ;
+
+
+(*
+   adjust - while value < 0 wait ; value++
+            while value > 0 signal ; value--
+*)
+
+PROCEDURE adjust (sem: SEMAPHORE; value: INTEGER) ;
+
+
+(*
+   initSharedMemory - should only be called once.  It initialises the
+                      shared memory used by the semaphores and also
+                      allocates memsize extra bytes.  It returns the
+                      address of the extra memory (placed after the
+                      semaphores).
+*)
+
+PROCEDURE initSharedMemory (memsize: CARDINAL) : ADDRESS ;
 
 
 END multiprocessor.

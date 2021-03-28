@@ -31,7 +31,7 @@ FROM StringConvert IMPORT stoc ;
 FROM chessBoard IMPORT printBoard, whiteMove, blackMove, loadBoard, toggleDebug, toggleVerbose, toggleGroff,
                        findMateIn, setMaxTime, makeNextMove, listMoves, inputBoard, setInputFile, getDebug,
                        setMaxProcessors, listMicrocodeMoves, environment, boardFlagHelp, printStatus,
-                       enterNextMove, searchAssert ;
+                       enterNextMove, searchAssert, toggleVerify ;
 
 FROM DynamicStrings IMPORT String, InitString, ConCatChar, EqualArray, Dup, string, Length,
                            RemoveWhitePrefix, RemoveWhitePostfix, KillString, Index, Slice, Mark, char ;
@@ -90,6 +90,10 @@ BEGIN
    printf ("E echostring    : echostring to the output file or stream.\n");
    printf ("S               : toggle prompt when stdin is used as input.\n");
    printf ("F               : toggle prompt when a file is used as input.\n");
+   printf ("V               : verify single and multiprocessor scores are the same.\n");
+   printf ("                : this option runs the single and multiprocessor search algoriths\n");
+   printf ("                : and checks that the same score is calculated\n");
+   printf ("                : (there may be multiple moves with the same score though).\n");
 END displayHelp ;
 
 
@@ -523,6 +527,9 @@ BEGIN
          ELSIF EqualArray (w, 'F')
          THEN
             toggleBoolean (fileprompt, "file prompt")
+         ELSIF EqualArray (w, 'V')
+         THEN
+            toggleVerify
          ELSE
             a := string (s) ;
             printf ("unknown command: %s\n", a);

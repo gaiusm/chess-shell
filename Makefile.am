@@ -5,7 +5,7 @@ MY_DEPS = colors.o chessBoard.o chessShell.o multiprocessor.o stdio.o
 
 OPT=-O0 -fm2-g -g
 CHECK=-fsoft-check-all
-M2FLAGS=$(OPT) $(CHECK) -fextended-opaque -flibs=pim,iso
+M2FLAGS=$(OPT) $(CHECK) -fextended-opaque -flibs=pim,iso # -fanalyzer
 
 all-local:  chess-shell$(EXEEXT)
 

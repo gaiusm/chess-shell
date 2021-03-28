@@ -1,4 +1,4 @@
-(* Copyright (C) 2015-2020
+(* Copyright (C) 2015-2021
    Free Software Foundation, Inc.  *)
 (* This file is part of GNU Modula-2.
 
@@ -19,7 +19,7 @@ Boston, MA 02110-1301, USA. *)
 
 IMPLEMENTATION MODULE chessBoard ;  (*m2iso+gm2*)
 
-FROM libc IMPORT printf, exit, sleep ;
+FROM libc IMPORT printf, exit, sleep, getpid ;
 FROM wrapc IMPORT getrand ;
 FROM SYSTEM IMPORT BYTE, WORD, WORD16, INTEGER8, CARDINAL8, ADDRESS ;
 FROM Storage IMPORT ALLOCATE ;
@@ -35,16 +35,17 @@ FROM DynamicStrings IMPORT String, string, InitString, KillString, Equal, ConCat
                            char, Length, EqualArray, ConCat, ConCatChar ;
 
 IMPORT multiprocessor, colors ;
+FROM multiprocessor IMPORT SEMAPHORE, wait, signal, adjust ;
 
 
 CONST
    DebugAlphaBeta  = FALSE ;
    DebugGeneration = FALSE ;
    Stress          = FALSE ;
-   MaxStack        =     20 ;
-   MaxPlies        =     20 ;
-   MaxScore        =    120 ;
-   MinScore        =   -120 ;
+   MaxStack        =      20 ;
+   MaxPlies        =      20 ;
+   MaxScore        =  100000 ;
+   MinScore        = -100000 ;
    WhiteWin        = MaxScore - MaxPlies ;
    BlackWin        = MinScore + MaxPlies ;
    MaxSquares      = 64 ;
@@ -60,8 +61,12 @@ CONST
    WhiteKing       = 3 ;          (* white king starts on this square.  *)
    BlackKing       = 59 ;         (* black king starts on this square.  *)
    debugging       = FALSE ;
+   debugMultiProc  = FALSE ;      (* display multiprocessor debugging.  *)
    UnusedSquare    = MaxSquares ; (* if this square is indexed then the piece is empty.  *)
    DefaultPlies    = 3 ;          (* default to looking 3 plies ahead.  *)
+   unusedPlyHeap   = 0 ;
+   MaxPlyPool      = 100 ;
+   MaxProcessors   =  64 ;
 
 TYPE
    status = (finished, ready, running) ;
@@ -73,9 +78,35 @@ TYPE
                       pstatus : status ;
                    END ;
 
+   resultInfo = RECORD
+                   result: INTEGER ;   (* value returned.   *)
+                   pid   : INTEGER ;   (* child pid.        *)
+                   pix   : INTEGER ;   (* processor index.  *)
+                END ;
+
+   plyProcessor = RECORD
+                     processors          : ARRAY [0..MaxPlyMoves] OF processorInfo ;
+                     nextProcessors      : CARDINAL ;  (* number of move processors used.  *)
+                     topCount            : CARDINAL ;  (* field only used by top.  *)
+                     initialised,                      (* have the semaphores been initialised yet?  *)
+                     inuse               : BOOLEAN ;   (* is the record currently in use?  *)
+                     childrenAvailable   : CARDINAL ;  (* the number of children can be spawned.  *)
+                     childrenActive      : CARDINAL ;  (* the number of moves to be explored in this ply (or results required).  *)
+                     plyTurn             : Colour ;
+                     plyAlpha,
+                     plyBeta,
+                     best,                             (* current best score found.  *)
+                     in, out, no         : CARDINAL ;
+                     results             : ARRAY [0..MaxProcessors] OF resultInfo ;   (* results being passed back to the parent from children.  *)
+                     plyMutex,
+                     processorAvailable  : SEMAPHORE ; (* signalled by each child process upon completion.  *)
+                     nextFree            : CARDINAL ;  (* next available plyProcessor.  *)
+                     isparallel          : BOOLEAN ;   (* use the parallel algorithm?  *)
+                  END ;
+
    MoveRange       = [0..MaxMoves] ;   (* index into the moves array.  *)
 
-   DecodeProcedure = PROCEDURE (VAR Board, MoveRange) ;
+   DecodeProcedure = PROCEDURE (VAR Board, MoveRange, plyRange) ;
 
    Colour          = (white, black) ;
    PieceT          = (none, pawn, shadow, knight, bishop, rook, queen, king) ;
@@ -227,6 +258,12 @@ TYPE
 
    PieceValue = ARRAY PieceT OF INTEGER ;
 
+   plyRange = [0..MaxPlyPool] ;
+
+   plyArrayRange = [1..MaxPlyPool] ;
+
+   plyArray = ARRAY plyArrayRange OF plyProcessor ;
+
 VAR
    heapPtr            : HeapRange ;
    takePtr,
@@ -242,16 +279,16 @@ VAR
    prioritiseTime,
    verbose,
    debug,
-   groff              : BOOLEAN ;
+   groff,
+   verify             : BOOLEAN ;
    history            : Index ;
    moves              : ARRAY MoveRange OF MoveDescriptor ;
-   processors         : ARRAY [0..MaxPlyMoves] OF processorInfo ;
+   (*   processors         : ARRAY [0..MaxPlyMoves] OF processorInfo ; *)
    availableProcessors,
    usedProcessors,
    maxProcessors      : CARDINAL ;
    bestMove           : CARDINAL ;  (* the best top level move indice found so far.  *)
    best               : INTEGER ;   (* the best value so far found.  *)
-   topCount           : CARDINAL ;  (* count of processors in use (used by top).  *)
    topFrame           : FrameDescriptor ;
    totalMoveCount     : CARDINAL ;  (* count of moves explored in one turn.  *)
    maxPlies           : CARDINAL ;  (* how deep should the alphaBeta alg descend.  *)
@@ -259,6 +296,84 @@ VAR
    stackPtr           : CARDINAL ;
    searchFlags        : SearchFlags ;
    pieceValue         : PieceValue ;
+   plyPool            : POINTER TO plyArray ;
+   topPoolId,
+   freePlyPool        : CARDINAL ;
+   mutexPlyPool       : SEMAPHORE ;
+
+
+(*
+   initPlyPool -
+*)
+
+PROCEDURE initPlyPool (i: CARDINAL; noProcessors: CARDINAL;
+                       turn: Colour; alpha, beta: INTEGER; parallel: BOOLEAN) : CARDINAL ;
+BEGIN
+   WITH plyPool^[i] DO
+      IF initialised
+      THEN
+         multiprocessor.adjust (processorAvailable, noProcessors)
+      ELSE
+         plyMutex := multiprocessor.initSem (1) ;
+         processorAvailable := multiprocessor.initSem (noProcessors)
+      END ;
+      childrenAvailable := noProcessors ;
+      childrenActive := noProcessors ;
+      topCount := 0 ;
+      stop ;
+      nextProcessors := 0 ;
+      plyAlpha := alpha ;
+      plyBeta := beta ;
+      plyTurn := turn ;
+      no := 0 ;
+      out := 0 ;
+      in := 0 ;
+      best := minScoreColour (turn) ;
+      inuse := TRUE ;
+      initialised := TRUE ;
+      isparallel := parallel ;
+   END ;
+   RETURN i
+END initPlyPool ;
+
+
+(*
+   newPlyPool - return a new plyProcessor descriptor.
+*)
+
+PROCEDURE newPlyPool (noProcessors: CARDINAL; turn: Colour; alpha, beta: INTEGER;
+                      parallel: BOOLEAN) : CARDINAL ;
+VAR
+   i: CARDINAL ;
+BEGIN
+   wait (mutexPlyPool) ;
+   i := freePlyPool ;
+   IF i = 0
+   THEN
+      HALT  (* increase MaxPlyPool.  *)
+   END ;
+   freePlyPool := plyPool^[i].nextFree ;
+   Assert (NOT plyPool^[i].inuse) ;
+   i := initPlyPool (i, noProcessors, turn, alpha, beta, parallel) ;
+   signal (mutexPlyPool) ;
+   RETURN i
+END newPlyPool ;
+
+
+(*
+   killPlyPool -
+*)
+
+PROCEDURE killPlyPool (poolId: CARDINAL) : CARDINAL ;
+BEGIN
+   Assert (poolId # 0) ;
+   wait (mutexPlyPool) ;
+   plyPool^[poolId].inuse := FALSE ;
+   plyPool^[poolId].nextFree := freePlyPool ;
+   freePlyPool := poolId ;
+   signal (mutexPlyPool) ;
+   RETURN unusedPlyHeap
+END killPlyPool ;
 
 
 (*
@@ -1483,7 +1598,7 @@ BEGIN
          IF prettyMove (b, moves[movePtr].cons) = 0
          THEN
          END ;
-         dumpMicrocode (b, moves[movePtr].cons)
+         dumpMicrocode (b, moves[movePtr].cons, unusedPlyHeap)
       END ;
       pushBoard (stringBoard (b))
    END ;
@@ -1508,7 +1623,7 @@ BEGIN
          IF DebugGeneration
          THEN
             printf ("reverse code: ");
-            dumpMicrocode (b, moves[movePtr].decons) ; printf ("\n")
+            dumpMicrocode (b, moves[movePtr].decons, unusedPlyHeap) ; printf ("\n")
          END ;
          popBoard (stringBoard (b))
       END ;
@@ -2619,13 +2734,13 @@ END dumpFlags ;
    dumpMoves -
 *)
 
-PROCEDURE dumpMoves (VAR b: Board; m: MoveRange) ;
+PROCEDURE dumpMoves (VAR b: Board; m: MoveRange; ply: plyRange) ;
 BEGIN
    printf ("%d   cons   ", m) ;
-   dumpMicrocode (b, moves[m].cons) ;
+   dumpMicrocode (b, moves[m].cons, ply) ;
    printf ("\n") ;
    printf ("    [decons ", m) ;
-   dumpMicrocode (b, moves[m].decons) ;
+   dumpMicrocode (b, moves[m].decons, ply) ;
    printf ("]\n") ;
 END dumpMoves ;
 
@@ -2634,7 +2749,7 @@ END dumpMoves ;
    dumpMicrocode -
 *)
 
-PROCEDURE dumpMicrocode (VAR b: Board; i: HeapRange) ;
+PROCEDURE dumpMicrocode (VAR b: Board; i: HeapRange; ply: plyRange) ;
 VAR
    head    : Instruction ;
    n, j    : HeapRange ;
@@ -2956,14 +3071,10 @@ END prettyMove ;
    foreachMoveDo -
 *)
 
-PROCEDURE foreachMoveDo (VAR b: Board; i, j: MoveRange; proc: DecodeProcedure) ;
+PROCEDURE foreachMoveDo (VAR b: Board; i, j: MoveRange; ply: plyRange; proc: DecodeProcedure) ;
 BEGIN
    WHILE i < j DO
-      proc (b, i) ;  (* got to here. *)
-      IF moves[i].kind # nop
-      THEN
-
-      END ;
+      proc (b, i, ply) ;
       INC (i)
    END
 END foreachMoveDo ;
@@ -3568,47 +3679,19 @@ END setMaxProcessors ;
    register - associate the, pid, of the child process with the, move.
 *)
 
-PROCEDURE register (pid: INTEGER; move: HeapRange) ;
+PROCEDURE registerRunning (pid: INTEGER; move: HeapRange; ply: plyRange) : CARDINAL ;
 VAR
    p: CARDINAL ;
 BEGIN
-   p := 0 ;
-   WHILE p < usedProcessors DO
-      IF processors[p].pstatus # running
-      THEN
-         Assert ((processors[p].pstatus = ready) OR (processors[p].pstatus = finished)) ;
-         processors[p].childPid := pid ;
-         processors[p].pstatus := running ;
-         processors[p].move := move ;
-         RETURN
-      END ;
-      INC (p)
-   END
-END register ;
-
-
-(*
-   unregister - disassociate the, pid, of the child process with the, move.
-                TRUE is returned if the child process, pid, was found.
-*)
-
-PROCEDURE unregister (pid: INTEGER; result: INTEGER; VAR m: MoveRange) : BOOLEAN ;
-VAR
-   p: CARDINAL ;
-BEGIN
-   p := 0 ;
-   WHILE p < usedProcessors DO
-      IF processors[p].childPid = pid
-      THEN
-         processors[p].result := result ;
-         processors[p].pstatus := finished ;
-         m := processors[p].move ;
-         RETURN TRUE
-      END ;
-      INC (p)
+   WITH plyPool^[ply] DO
+      p := nextProcessors ;
+      INC (nextProcessors) ;
+      processors[p].pstatus := running ;
+      processors[p].childPid := pid ;
+      processors[p].move := move
    END ;
-   RETURN FALSE
-END unregister ;
+   RETURN p
+END registerRunning ;
 
 
 (*
@@ -3676,92 +3759,6 @@ END rememberBest ;
 
 
 (*
-   waitProcessorAvailable -
-*)
-
-PROCEDURE waitProcessorAvailable (turn: Colour; best: INTEGER) : INTEGER ;
-VAR
-   m     : MoveRange ;
-   pid,
-   result: INTEGER ;
-BEGIN
-   printf ("want to allocate a processor: ") ;
-   IF availableProcessors = 0
-   THEN
-      printf ("no more available, waiting for one to become available\n") ;
-      printf ("%d processes running\n", usedProcessors) ;
-      top ;
-      REPEAT
-         pid := multiprocessor.waitChild (result) ;
-         printf ("child %d has finished\n", pid) ;
-         result := code2score (result)
-      UNTIL unregister (pid, result, m) ;
-      top ;
-      best := rememberBest (turn, result, best, m) ;
-      printf ("  excellent a processor has become available\n")
-   ELSE
-      DEC (availableProcessors) ;
-      processors[usedProcessors].pstatus := ready ;
-      INC (usedProcessors) ;
-      printf ("yes allocated 1, %d are available, %d are used\n",
-              availableProcessors, usedProcessors) ;
-   END ;
-   RETURN best
-END waitProcessorAvailable ;
-
-
-(*
-   noOutStandingProcesses -
-*)
-
-PROCEDURE noOutStandingProcesses () : CARDINAL ;
-VAR
-   p, n: CARDINAL ;
-BEGIN
-   n := 0 ;
-   p := 0 ;
-   WHILE p < usedProcessors DO
-      IF processors[p].pstatus = running
-      THEN
-         INC (n)
-      END ;
-      INC (p)
-   END ;
-   RETURN n
-END noOutStandingProcesses ;
-
-
-(*
-   waitProcessorsComplete -
-*)
-
-PROCEDURE waitProcessorsComplete (best: INTEGER; turn: Colour) : INTEGER ;
-VAR
-   m     : MoveRange ;
-   p     : CARDINAL ;
-   pid,
-   result: INTEGER ;
-BEGIN
-   top ;
-   IF maxProcessors > 1
-   THEN
-      printf ("waitProcessorsComplete\n");
-      WHILE noOutStandingProcesses () > 0 DO
-         REPEAT
-            pid := multiprocessor.waitChild (result) ;
-            printf ("child %d has finished\n", pid);
-            result := code2score (result)
-         UNTIL unregister (pid, result, m) ;
-         top ;
-         best := rememberBest (turn, result, best, m)
-      END ;
-      top
-   END ;
-   RETURN best
-END waitProcessorsComplete ;
-
-
-(*
    isDraw - returns TRUE if there are not enough pieces
             on the board to force a win.
 *)
@@ -3795,6 +3792,14 @@ END stop ;
 
 
 (*
+   stop1 -
+*)
+
+PROCEDURE stop1 ;
+END stop1 ;
+
+
+(*
    alphaBeta - A move has been applied to board, b, and now it is colour, c,
                turn to move.  The score of the board is returned.
 *)
@@ -3822,7 +3827,7 @@ BEGIN
       movetop := movePtr ;
       IF DebugAlphaBeta
       THEN
-         foreachMoveDo (b, fd.movePtr, movetop, prettyList)
+         foreachMoveDo (b, fd.movePtr, movetop, unusedPlyHeap, prettyList)
       END ;
       IF colour = white
       THEN
@@ -3838,8 +3843,7 @@ BEGIN
                IF DebugAlphaBeta
                THEN
                   printf ("seen check mate loss for white\n");
-                  displayBoard (b);
-                  stop
+                  displayBoard (b)
                END ;
                INCL (searchFlags, forceblackwin) ;
                RETURN BlackWin - pliesLeft   (* always choose an earlier win.  *)
@@ -3902,8 +3906,7 @@ BEGIN
                IF DebugAlphaBeta
                THEN
                   printf ("seen check mate loss for black\n");
-                  displayBoard (b);
-                  stop
+                  displayBoard (b)
                END ;
                INCL (searchFlags, forcewhitewin) ;
                RETURN WhiteWin + pliesLeft   (* always choose an earlier win.  *)
@@ -4001,7 +4004,7 @@ END writeYellow ;
    writeGreen -
 *)
 
-PROCEDURE writeGreen (VAR b: Board; m: MoveRange; pstatus: status) ;
+PROCEDURE writeGreen (VAR b: Board; m: MoveRange; pstatus: status; ply: plyRange) ;
 VAR
    count: CARDINAL ;
 BEGIN
@@ -4009,7 +4012,7 @@ BEGIN
    count := prettyMove (b, moves[m].cons) ;
    printf (" [") ;
    writeStatus (pstatus) ;
-   printf (": %d]", processors[m].result) ;
+   printf (": %d]", plyPool^[ply].processors[m].result) ;
    colors.reset
 END writeGreen ;
 
@@ -4018,14 +4021,14 @@ END writeGreen ;
    writeBlue -
 *)
 
-PROCEDURE writeBlue (VAR b: Board; m: MoveRange; pstatus: status) ;
+PROCEDURE writeBlue (VAR b: Board; m: MoveRange; pstatus: status; ply: plyRange) ;
 VAR
    count: CARDINAL ;
 BEGIN
    colors.blue ; count := prettyMove (b, moves[m].cons) ;
    printf (" [") ;
    writeStatus (pstatus) ;
-   printf (": %d]", processors[m].result) ;
+   printf (": %d]", plyPool^[ply].processors[m].result) ;
    colors.reset
 END writeBlue ;
 
@@ -4034,14 +4037,14 @@ END writeBlue ;
    writeMagenta -
 *)
 
-PROCEDURE writeMagenta (VAR b: Board; m: MoveRange; pstatus: status) ;
+PROCEDURE writeMagenta (VAR b: Board; m: MoveRange; pstatus: status; ply: plyRange) ;
 VAR
    count: CARDINAL ;
 BEGIN
    colors.magenta ; count := prettyMove (b, moves[m].cons) ;
    printf (" [") ;
    writeStatus (pstatus) ;
-   printf (": %d]", processors[m].result) ;
+   printf (": %d]", plyPool^[ply].processors[m].result) ;
    colors.reset
 END writeMagenta ;
 
@@ -4050,14 +4053,14 @@ END writeMagenta ;
    writeCyan -
 *)
 
-PROCEDURE writeCyan (VAR b: Board; m: MoveRange; pstatus: status) ;
+PROCEDURE writeCyan (VAR b: Board; m: MoveRange; pstatus: status; ply: plyRange) ;
 VAR
    count: CARDINAL ;
 BEGIN
    colors.cyan ; count := prettyMove (b, moves[m].cons) ;
    printf (" [") ;
    writeStatus (pstatus) ;
-   printf (": %d]", processors[m].result) ;
+   printf (": %d]", plyPool^[ply].processors[m].result) ;
    colors.reset
 END writeCyan ;
 
@@ -4079,29 +4082,30 @@ END writeStatus ;
 
 
 (*
-   score2code - convert the score into a byte 0..255 value.  The first bit is used
-                to represent a seen forced draw.
+   score2code - set the first bit if a forced draw has been seen.
 *)
 
 PROCEDURE score2code (result: INTEGER) : INTEGER ;
 BEGIN
    INC (result, MaxScore) ;
    Assert (result >= 0) ;
+   Assert ((result MOD 2) = 0) ;
    IF forcedraw IN searchFlags
    THEN
       result := VAL (INTEGER, VAL (BITSET, result) + BITSET {0})
    END ;
+   DEC (result, MaxScore) ;
    RETURN result
 END score2code ;
 
 
 (*
-   code2score - convert the exit code into a result score from a byte 0..255 value.
-                The first bit is used to represent a seen forced draw.
+   code2score - the first bit is used to represent a seen forced draw.
 *)
 
 PROCEDURE code2score (result: INTEGER) : INTEGER ;
 BEGIN
+   INC (result, MaxScore) ;
    IF 0 IN BITSET (result)
    THEN
       INCL (searchFlags, forcedraw) ;
@@ -4113,48 +4117,183 @@ END code2score ;
 
 
 (*
+   exploreSingleProcessor -
+*)
+
+PROCEDURE exploreSingleProcessor (VAR b: Board; m: MoveRange; ply: plyRange) ;
+VAR
+   result: INTEGER ;
+BEGIN
+   (*
+   printf ("inc topCount %d\n", plyPool^[ply].topCount) ;
+   *)
+   INC (plyPool^[ply].topCount) ;
+   (*
+   stop1 ;
+   printf ("single processor: ply %d, move %d  topCount %d\n", ply, m, plyPool^[ply].topCount) ;
+   *)
+   executeForward (b, turn, m) ;
+   result := exploreBoard (b, opposite (turn), plyPool^[ply].best) ;
+   plyPool^[ply].best := rememberBest (turn, result, plyPool^[ply].best, m) ;
+   plyPool^[ply].processors[m].result := result ;
+   plyPool^[ply].processors[m].pstatus := finished ;
+   executeBackward (b, turn, m) ;
+   top (ply)
+END exploreSingleProcessor ;
+
+
+(*
+   collectResults - collect all outstanding results given by any children.
+*)
+
+PROCEDURE collectResults (ply: plyRange) ;
+VAR
+   pid,
+   result: INTEGER ;
+   pix   : CARDINAL ;
+BEGIN
+   IF debugMultiProc
+   THEN
+      printf ("collectResult\n");
+      printf ("wait plyMutex 1\n")
+   END ;
+   wait (plyPool^[ply].plyMutex) ;
+   WHILE plyPool^[ply].no > 0 DO
+      IF debugMultiProc
+      THEN
+         printf ("collectResult:  a result\n")
+      END ;
+      pix := plyPool^[ply].results[plyPool^[ply].out].pix ;
+      pid := plyPool^[ply].results[plyPool^[ply].out].pid ;
+      result := plyPool^[ply].results[plyPool^[ply].out].result ;
+      plyPool^[ply].out := (plyPool^[ply].out + 1) MOD MaxProcessors ;
+      DEC (plyPool^[ply].no) ;
+      Assert (plyPool^[ply].processors[pix].childPid = pid) ;
+      plyPool^[ply].processors[pix].result := result ;
+      plyPool^[ply].best := rememberBest (plyPool^[ply].plyTurn, result, plyPool^[ply].best, plyPool^[ply].processors[pix].move) ;
+      IF debugMultiProc
+      THEN
+         printf ("end while\n")
+      END
+   END ;
+   signal (plyPool^[ply].plyMutex) ;
+   IF debugMultiProc
+   THEN
+      printf ("end collectResults\n")
+   END
+END collectResults ;
+
+
+(*
+   putResult -
+*)
+
+PROCEDURE putResult (ply: plyRange; pix: CARDINAL; result, pid: INTEGER) ;
+BEGIN
+   wait (plyPool^[ply].plyMutex) ;
+   INC (plyPool^[ply].no) ;
+   plyPool^[ply].results[plyPool^[ply].in].pid := pid ;
+   plyPool^[ply].results[plyPool^[ply].in].pix := pix ;
+   plyPool^[ply].results[plyPool^[ply].in].result := result ;
+   plyPool^[ply].in := (plyPool^[ply].in + 1) MOD MaxProcessors ;
+   signal (plyPool^[ply].plyMutex)
+END putResult ;
+
+
+(*
+   exploreMultiProcessor -
+*)
+
+PROCEDURE exploreMultiProcessor (VAR b: Board; m: MoveRange; ply: plyRange) ;
+VAR
+   pix   : CARDINAL ;
+   result,
+   pid   : INTEGER ;
+BEGIN
+   IF debugMultiProc
+   THEN
+      printf ("about to wait processorAvailable\n")
+   END ;
+   wait (plyPool^[ply].processorAvailable) ;
+   wait (plyPool^[ply].plyMutex) ;
+   DEC (plyPool^[ply].childrenActive) ;
+   INC (plyPool^[ply].topCount) ;
+   signal (plyPool^[ply].plyMutex) ;
+
+   collectResults (ply) ;
+   IF debugMultiProc
+   THEN
+      printf ("processor available, about to fork: ")
+   END ;
+   IF prettyMove (b, moves[m].cons) = 0
+   THEN
+   END ;
+   IF debugMultiProc
+   THEN
+      printf ("about to fork\n")
+   END ;
+   pid := multiprocessor.fork () ;
+   IF pid = 0
+   THEN
+      pid := getpid () ;
+      IF debugMultiProc
+      THEN
+         printf ("child: %d running\n", pid)
+      END ;
+      wait (plyPool^[ply].plyMutex) ;
+      pix := registerRunning (getpid (), m, ply) ;
+      signal (plyPool^[ply].plyMutex) ;
+      IF debugMultiProc
+      THEN
+         printf ("child: %d exploring\n", pid)
+      END ;
+      (* the child process does the work.  *)
+      executeForward (b, turn, m) ;
+      result := exploreBoard (b, opposite (turn), best) ;
+      (*
+      result := pix ;
+      sleep (1) ;
+      *)
+      IF debugMultiProc
+      THEN
+         printf ("child: %d deliver result: %d\n", getpid (), result)
+      END ;
+      putResult (ply, pix, result, pid) ;
+      signal (plyPool^[ply].processorAvailable) ;
+      IF debugMultiProc
+      THEN
+         printf ("child: %d exit (0)\n", pid)
+      END ;
+      exit (0)
+   ELSE
+      wait (plyPool^[ply].plyMutex) ;
+      INC (plyPool^[ply].childrenActive) ;
+      signal (plyPool^[ply].plyMutex)
+   END ;
+   top (ply)
+END exploreMultiProcessor ;
+
+
+(*
    distributeMove -
 *)
 
-PROCEDURE distributeMove (VAR b: Board; m: MoveRange) ;
-VAR
-   result,
-   child : INTEGER ;
+PROCEDURE distributeMove (VAR b: Board; m: MoveRange; ply: plyRange) ;
 BEGIN
-   top ;
-   printf ("distributeMove\n");
-   IF maxProcessors > 1
+   top (ply) ;
+   IF plyPool^[ply].isparallel
    THEN
-      printf ("about to fork: ");
-      IF prettyMove (b, moves[m].cons) = 0
+      IF debugMultiProc
       THEN
+         printf ("distributeMove parallel\n")
       END ;
-      printf ("\n");
-      printf ("about to wait for a processor\n");
-      best := waitProcessorAvailable (turn, best) ;
-      printf ("a processor is now available\n");
-      child := multiprocessor.fork () ;
-      IF child = 0
-      THEN
-         (* the child process does the work.  *)
-         executeForward (b, turn, m) ;
-         result := exploreBoard (b, opposite (turn), best) ;
-         result := score2code (result) ;
-         printf ("process exiting with: %d\n", result);
-         exit (result)
-      ELSE
-         (* parent records child and eventually waits for the children to complete.  *)
-         register (child, m) ;
-         top
-      END
+      exploreMultiProcessor (b, m, ply)
    ELSE
-      printf ("single processor\n");
-      executeForward (b, turn, m) ;
-      result := exploreBoard (b, opposite (turn), best) ;
-      best := rememberBest (turn, result, best, m) ;
-      processors[m].result := result ;
-      processors[m].pstatus := finished ;
-      executeBackward (b, turn, m)
+      IF debugMultiProc
+      THEN
+         printf ("distributeMove single\n")
+      END ;
+      exploreSingleProcessor (b, m, ply)
    END
 END distributeMove ;
 
@@ -4195,20 +4334,20 @@ END maxScoreColour ;
    processorMove -
 *)
 
-PROCEDURE processorMove (VAR b: Board; m: MoveRange) : BOOLEAN ;
+PROCEDURE processorMove (VAR b: Board; m: MoveRange; ply: plyRange) : BOOLEAN ;
 VAR
    p: CARDINAL ;
 BEGIN
    p := 0 ;
    WHILE p < maxProcessors DO
-      IF processors[p].move = m
+      IF plyPool^[ply].processors[p].move = m
       THEN
-         CASE processors[p].pstatus OF
+         CASE plyPool^[ply].processors[p].pstatus OF
 
-         finished:  writeGreen (b, m, finished) |
+         finished:  writeGreen (b, m, finished, ply) |
          ready   :  writeYellow (b, m, ready) |
          running :  writeRed (b, m) ;
-                    printf ("  [running] pid %d", processors[p].childPid)
+                    printf ("  [running] pid %d", plyPool^[ply].processors[p].childPid)
 
          END ;
          RETURN TRUE
@@ -4225,33 +4364,29 @@ END processorMove ;
                   if there are no more moves to be explored.
 *)
 
-PROCEDURE topColorMove (VAR b: Board; m: MoveRange) ;
+PROCEDURE topColorMove (VAR b: Board; m: MoveRange; ply: plyRange) ;
 BEGIN
-   IF maxProcessors = 1
+   (*
+   printf ("plyPool^[ply].topCount = %d, nextProcessor = %d, m = %d\n",
+           plyPool^[ply].topCount, plyPool^[ply].nextProcessors, m);
+   *)
+   IF m < plyPool^[ply].topCount
    THEN
-      IF NOT processorMove (b, m)
-      THEN
-         writeBlue (b, m, ready)
+      CASE plyPool^[ply].processors[m].pstatus OF
+
+      finished:  writeGreen (b, m, finished, ply) |
+      ready   :  writeCyan (b, m, ready, ply) |
+      running :  writeRed (b, m)
+
       END
-   ELSIF (topCount > 0) AND processorMove (b, m)
-   THEN
-      (* it was a processor assigned to a move, therefore decriment the count.  *)
-      DEC (topCount)
    ELSE
-      IF topCount > 0
-      THEN
-         (* as there are still processor assigned moves in the list this move
-            must have completed.  *)
-         writeGreen (b, m, finished)
-      ELSE
-         (* otherwise we display the move with another colour.  *)
-         CASE moves[m].kind OF
+      (* otherwise we display the move with another colour.  *)
+      CASE moves[m].kind OF
 
-         mov:  writeCyan (b, m, ready) ; printf ("  mov") |
-         tak:  writeMagenta (b, m, ready) ; printf ("  tak") |
-         nop:  writeBlue (b, m, ready) ;  printf ("  nop  [%d] ", m)
+      mov:  writeCyan (b, m, ready, ply) ; printf ("  mov") |
+      tak:  writeMagenta (b, m, ready, ply) ; printf ("  tak") |
+      nop:  writeBlue (b, m, ready, ply) ;  printf ("  nop  [%d] ", m)
 
-         END
       END
    END ;
    printf ("\n")
@@ -4262,14 +4397,16 @@ END topColorMove ;
    top - a pseudo ps (top) utility in chess shell.
 *)
 
-PROCEDURE top ;
+PROCEDURE top (ply: plyRange) ;
 BEGIN
    colors.clear ;
    colors.home ;
-   printf ("Chess system processors:  %d,  Running chess processors %d,  Available chess processors: %d\n",
-            maxProcessors, usedProcessors, availableProcessors) ;
-   topCount := usedProcessors ;
-   foreachMoveDo (currentBoard, topFrame.movePtr, movePtr, topColorMove)
+   (*
+   stop ;
+   printf ("Ply: %d, Chess system processors:  %d,  Running chess processors %d,  Available chess processors: %d\n",
+            ply, maxProcessors, plyPool^[ply].childrenActive, plyPool^[ply].childrenAvailable) ;
+   *)
+   foreachMoveDo (currentBoard, topFrame.movePtr, movePtr, ply, topColorMove)
 END top ;
 
 
@@ -4277,30 +4414,74 @@ END top ;
    primeTop -
 *)
 
-PROCEDURE primeTop (fd: FrameDescriptor) ;
+PROCEDURE primeTop (fd: FrameDescriptor; ply: plyRange) ;
 VAR
    m: [0..MaxPlyMoves] ;
 BEGIN
+   plyPool^[ply].topCount := 0 ;
    topFrame := fd ;
    FOR m := 0 TO MaxPlyMoves DO
-      processors[m].result := 0 ;
-      processors[m].pstatus := ready
+      plyPool^[ply].processors[m].result := 0 ;
+      plyPool^[ply].processors[m].pstatus := ready ;
+      plyPool^[ply].processors[m].childPid := 0 ;
+      plyPool^[ply].processors[m].move := 0
    END
 END primeTop ;
+
+
+(*
+   returnBest -
+*)
+
+PROCEDURE returnBest (ply: plyRange) : INTEGER ;
+BEGIN
+   IF debugMultiProc
+   THEN
+      printf ("returnBest\n")
+   END ;
+   IF plyPool^[ply].isparallel
+   THEN
+      IF debugMultiProc
+      THEN
+         printf ("returnBest parallel\n")
+      END ;
+      (* need to wait for all children to complete.  *)
+      wait (plyPool^[ply].plyMutex) ;
+      WHILE plyPool^[ply].childrenActive > 0 DO
+         DEC (plyPool^[ply].childrenActive) ;
+         signal (plyPool^[ply].plyMutex) ;
+         IF debugMultiProc
+         THEN
+            printf ("returnBest wait processorAvailable\n")
+         END ;
+         wait (plyPool^[ply].processorAvailable) ;
+         collectResults (ply) ;
+         IF debugMultiProc
+         THEN
+            printf ("returnBest after collectResults\n")
+         END ;
+         wait (plyPool^[ply].plyMutex) ;
+      END ;
+      signal (plyPool^[ply].plyMutex) ;
+   END ;
+   RETURN plyPool^[ply].best
+END returnBest ;
 
 
 (*
    distributeSearch -
 *)
 
-PROCEDURE distributeSearch (fd: FrameDescriptor; turn: Colour) : INTEGER ;
+PROCEDURE distributeSearch (fd: FrameDescriptor; turn: Colour; alpha, beta: INTEGER) : INTEGER ;
+VAR
+   best: INTEGER ;
 BEGIN
+   topPoolId := newPlyPool (maxProcessors, turn, alpha, beta, (maxProcessors > 1)) ;
+   primeTop (fd, topPoolId) ;
    totalMoveCount := 0 ;
-   foreachMoveDo (currentBoard, fd.movePtr, movePtr, distributeMove) ;
-   IF maxProcessors > 1
-   THEN
-      best := waitProcessorsComplete (best, turn)
-   END ;
+   foreachMoveDo (currentBoard, fd.movePtr, movePtr, topPoolId, distributeMove) ;
+   best := returnBest (topPoolId) ;
+   topPoolId := killPlyPool (topPoolId) ;
    RETURN best
 END distributeSearch ;
 
@@ -4310,12 +4491,33 @@ END distributeSearch ;
 *)
 
 PROCEDURE makeMove (fd: FrameDescriptor; VAR b: Board; col: Colour) : INTEGER ;
+VAR
+   result, singleResult: INTEGER ;
 BEGIN
+   IF verify AND (maxProcessors > 1)
+   THEN
+      availableProcessors := 1 ;
+      calcScore (b) ;
+      singleResult := distributeSearch (fd, col, MinScore, MaxScore) ;
+      availableProcessors := maxProcessors ;
+      calcScore (b) ;
+      result := distributeSearch (fd, col, MinScore, MaxScore) ;
+      IF result = singleResult
+      THEN
+         printf ("single processor and multiprocessor verification passed\n")
+      ELSE
+         printf ("single processor and multiprocessor search algoriths generated different scores\n");
+         printf ("single processor result: %d, multiprocessor result: %d\n", singleResult, result) ;
+         exit (1)
+      END ;
+      RETURN result
+   ELSIF verify
+   THEN
+      printf ("verify flag V only takes effect is more than one processor is allowed to explore the move\n")
+   END ;
    availableProcessors := maxProcessors ;
-   primeTop (fd) ;
    calcScore (b) ;
-   top ;
-   RETURN distributeSearch (fd, col)
+   RETURN distributeSearch (fd, col, MinScore, MaxScore)
 END makeMove ;
 
 
@@ -4559,7 +4761,7 @@ BEGIN
    displayBoard (b) ;
    h := heapPtr ;
    genMoves (b, white) ;
-   foreachMoveDo (b, h, heapPtr, dumpMicrocode)
+   foreachMoveDo (b, h, heapPtr, unusedPlyHeap, dumpMicrocode)
 END test ;
 
 
@@ -4604,10 +4806,20 @@ END toggleGroff ;
 
 
 (*
+   toggleVerify -
+*)
+
+PROCEDURE toggleVerify ;
+BEGIN
+   verify := NOT verify
+END toggleVerify ;
+
+
+(*
    prettyList - displays the moves in a standard format.
 *)
 
-PROCEDURE prettyList (VAR b: Board; m: MoveRange) ;
+PROCEDURE prettyList (VAR b: Board; m: MoveRange; ply: plyRange) ;
 VAR
    count: HeapRange ;
 BEGIN
@@ -4652,7 +4864,7 @@ VAR
 BEGIN
    fd := saveFrame () ;
    genMoves (currentBoard, turn) ;
-   foreachMoveDo (currentBoard, fd.movePtr, movePtr, prettyList) ;
+   foreachMoveDo (currentBoard, fd.movePtr, movePtr, unusedPlyHeap, prettyList) ;
    restoreFrame (fd)
 END listMoves ;
 
@@ -4667,7 +4879,7 @@ VAR
 BEGIN
    fd := saveFrame () ;
    genMoves (currentBoard, turn) ;
-   foreachMoveDo (currentBoard, fd.movePtr, movePtr, dumpMoves) ;
+   foreachMoveDo (currentBoard, fd.movePtr, movePtr, unusedPlyHeap, dumpMoves) ;
    restoreFrame (fd)
 END listMicrocodeMoves ;
 
@@ -4687,7 +4899,19 @@ BEGIN
    THEN
       printf ("depth is limited to: %d plies\n", maxPlies)
    END ;
-   printf ("processors available to chess shell: %d\n", maxProcessors)
+   printf ("processors available to chess shell: %d\n", maxProcessors) ;
+   IF verify
+   THEN
+      printf ("single and multiprocessor verify is enabled\n")
+   END ;
+   IF debug
+   THEN
+      printf ("debug is enabled\n")
+   END ;
+   IF verbose
+   THEN
+      printf ("verbose is enabled\n")
+   END
 END environment ;
 
 
@@ -5224,17 +5448,42 @@ END calcScore  ;
 
 
 (*
+   initFreePlyPool -
+*)
+
+PROCEDURE initFreePlyPool ;
+VAR
+   p: plyRange ;
+BEGIN
+   FOR p := MIN (plyArrayRange) TO MAX (plyArrayRange) DO
+      plyPool^[p].initialised := FALSE ;   (* semaphores have not been initialised.  *)
+      plyPool^[p].inuse := FALSE ;  (* not in use yet.  *)
+      IF p < MAX (plyArrayRange)
+      THEN
+         plyPool^[p].nextFree := p+1
+      ELSE
+         plyPool^[p].nextFree := 0
+      END
+   END ;
+   freePlyPool := MIN (plyArrayRange)
+END initFreePlyPool ;
+
+
+(*
    init -
 *)
 
 PROCEDURE init ;
 BEGIN
+   plyPool := multiprocessor.initSharedMemory (SIZE (plyArray)) ;
+   mutexPlyPool := multiprocessor.initSem (1) ;
+   initFreePlyPool ;
    stackPtr := 0 ;
    maxPlies := DefaultPlies ;
-   topCount := 0 ;
    verbose := FALSE ;
    debug := FALSE ;
    groff := FALSE ;
+   verify := FALSE ;
    prioritiseTime := TRUE ;
    limitPlies := TRUE ;
    timeAllowed := 10 ;   (* initially 10 seconds/move  *)

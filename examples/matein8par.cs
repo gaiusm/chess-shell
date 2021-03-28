@@ -1,0 +1,55 @@
+d
+#
+#  chess shell test input for a mate in 4 moves
+#  or 8 half moves (plies)
+#
+h
+c
+p
+l
+s
+....k...
+........
+........
+R.......
+.......K
+........
+........
+........
+p
+# c 1
+c
+m 8
+j
+n
+n
+n
+n
+n
+n
+n
+n
+p
+n
+p
+n
+p
+n
+p
+n
+p
+n
+p
+n
+p
+n
+p
+n
+p
+n
+p
+n
+p
+n
+p
+x

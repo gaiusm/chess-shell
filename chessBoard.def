@@ -34,6 +34,7 @@ FROM FIO IMPORT File ;
 PROCEDURE toggleDebug ;
 PROCEDURE getDebug () : BOOLEAN ;
 PROCEDURE toggleVerbose ;
+PROCEDURE toggleVerify ;
 PROCEDURE toggleGroff ;
 PROCEDURE listMoves ;
 PROCEDURE listMicrocodeMoves ;

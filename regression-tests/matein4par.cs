@@ -18,8 +18,9 @@ R.......
 ........
 p
 # when this uses a parallel search the assert below fails
-c 1
-# c 12  # will fail!
+c 4
+V
+c 12  # will fail!
 t 0
 m 5
 e
