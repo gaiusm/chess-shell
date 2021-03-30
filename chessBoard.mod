@@ -67,6 +67,8 @@ CONST
    unusedPlyHeap   = 0 ;
    MaxPlyPool      = 100 ;
    MaxProcessors   =  64 ;
+   ScalePiece      =  256 ;       (* 8 bits needed for the search flags and ply value.  *)
+   ScalePly        =    8 ;       (* 3 bits needed to encode the result.  After that goes the ply value and then the material score.  *)
 
 TYPE
    status = (finished, ready, running) ;
@@ -2080,6 +2082,11 @@ PROCEDURE subPiece (VAR b: Board; sq: CARDINAL8; last: BOOLEAN) ;
 VAR
    i: InstructionSub ;
 BEGIN
+   IF isKing (b, b.square[sq].colour, sq)
+   THEN
+      printf ("assert will fail as the move is about to take the king!\n");
+      displayBoard (b)
+   END ;
    Assert (NOT isKing (b, b.square[sq].colour, sq)) ;
    i.last := last ;
    i.opcode := sub ;
@@ -3251,7 +3258,7 @@ VAR
    ix: CARDINAL8 ;
 BEGIN
    WITH b.pieces[c] DO
-      wbishop[nBBishops].xy := XY (x, y) ;
+      bbishop[nBBishops].xy := XY (x, y) ;
       ix := MIN (BBishopRange) + nBBishops ;
       INC (nBBishops)
    END ;
@@ -3730,27 +3737,45 @@ END max ;
    rememberBest -
 *)
 
-PROCEDURE rememberBest (turn: Colour; result, best: INTEGER; m: MoveRange) : INTEGER ;
+PROCEDURE rememberBest (ply: plyRange; turn: Colour; result, best: INTEGER; m: MoveRange) : INTEGER ;
 BEGIN
    IF turn = white
    THEN
-      IF result > WhiteWin
+      IF ply = topPoolId
       THEN
-         INCL (searchFlags, forcewhitewin)
+         IF result > WhiteWin
+         THEN
+            INCL (searchFlags, forcewhitewin)
+         ELSIF 0 IN BITSET (result)
+         THEN
+            INCL (searchFlags, forcedraw)
+         END
       END ;
       IF result > best
       THEN
-         bestMove := m ;
+         IF ply = topPoolId
+         THEN
+            bestMove := m
+         END ;
          RETURN result
       END
    ELSE
-      IF result < BlackWin
+      IF ply = topPoolId
       THEN
-         INCL (searchFlags, forceblackwin)
-      END ;
+         IF result < BlackWin
+         THEN
+            INCL (searchFlags, forceblackwin)
+         ELSIF 0 IN BITSET (result)
+         THEN
+            INCL (searchFlags, forcedraw)
+         END
+      END ;         
       IF result < best
       THEN
-         bestMove := m ;
+         IF ply = topPoolId
+         THEN
+            bestMove := m
+         END ;
          RETURN result
       END
    END ;
@@ -3800,6 +3825,22 @@ END stop1 ;
 
 
 (*
+   encodeSearch - 
+*)
+
+PROCEDURE encodeSearch (result: INTEGER; search: SearchFlags) : INTEGER ;
+BEGIN
+   CASE search OF
+
+   forcedraw    :  RETURN VAL (INTEGER, VAL (BITSET, result) + BITSET {0}) |
+   forcewhitewin:  RETURN VAL (INTEGER, VAL (BITSET, result) + BITSET {1}) |
+   forceblackwin:  RETURN VAL (INTEGER, VAL (BITSET, result) + BITSET {2})
+   
+   END
+END encodeSearch ;
+
+
+(*
    alphaBeta - A move has been applied to board, b, and now it is colour, c,
                turn to move.  The score of the board is returned.
 *)
@@ -3818,9 +3859,16 @@ BEGIN
       RETURN b.score
    ELSIF isDraw (b)
    THEN
-      INCL (searchFlags, forcedraw) ;
-      RETURN 0 - pliesLeft   (* always choose an earlier draw, otherwise
-                              it might always chase an elusive draw.  *)
+      (* always choose an earlier draw, otherwise
+         it might always chase an elusive draw.  *)
+      IF colour = white
+      THEN
+         try := 0 - pliesLeft
+      ELSE
+         try := pliesLeft
+      END ;
+      try := try * ScalePly ;
+      RETURN encodeSearch (try, forcedraw)
    ELSE
       fd := saveFrame () ;
       genMoves (b, colour) ;
@@ -3845,13 +3893,15 @@ BEGIN
                   printf ("seen check mate loss for white\n");
                   displayBoard (b)
                END ;
-               INCL (searchFlags, forceblackwin) ;
-               RETURN BlackWin - pliesLeft   (* always choose an earlier win.  *)
+               try := BlackWin - pliesLeft ;  (* always choose an earlier win.  *)
+               try := try * ScalePly ;               
+               RETURN encodeSearch (try, forceblackwin)
             ELSE
                restoreFrame (fd) ;
-               INCL (searchFlags, forcedraw) ;
-               RETURN 0 - pliesLeft   (* always choose an earlier draw, otherwise
-                                         it might always chase an elusive draw.  *)
+               try := 0 - pliesLeft ;  (* always choose an earlier draw, otherwise
+                                          it might always chase an elusive draw.  *)
+               try := try * ScalePly ;                                                         
+               RETURN encodeSearch (try, forcedraw)                                          
             END
          ELSE
             i := fd.movePtr ;
@@ -3908,17 +3958,19 @@ BEGIN
                   printf ("seen check mate loss for black\n");
                   displayBoard (b)
                END ;
-               INCL (searchFlags, forcewhitewin) ;
-               RETURN WhiteWin + pliesLeft   (* always choose an earlier win.  *)
+               try := WhiteWin + pliesLeft ;  (* always choose an earlier win.  *)
+               try := try * ScalePly ;                              
+               RETURN encodeSearch (try, forcewhitewin)
             ELSE
                IF DebugAlphaBeta
                THEN
                   printf ("seen draw for black\n")
                END ;
                restoreFrame (fd) ;
-               INCL (searchFlags, forcedraw) ;
-               RETURN 0 + pliesLeft   (* always choose an earlier draw, otherwise
-                                         it might always chase an elusive draw.  *)
+               try := 0 + pliesLeft ;  (* always choose an earlier draw, otherwise
+                                          it might always chase an elusive draw.  *)
+               try := try * ScalePly ;                                                         
+               RETURN encodeSearch (try, forcedraw)
             END
          ELSE
             i := fd.movePtr ;
@@ -4082,41 +4134,6 @@ END writeStatus ;
 
 
 (*
-   score2code - set the first bit if a forced draw has been seen.
-*)
-
-PROCEDURE score2code (result: INTEGER) : INTEGER ;
-BEGIN
-   INC (result, MaxScore) ;
-   Assert (result >= 0) ;
-   Assert ((result MOD 2) = 0) ;
-   IF forcedraw IN searchFlags
-   THEN
-      result := VAL (INTEGER, VAL (BITSET, result) + BITSET {0})
-   END ;
-   DEC (result, MaxScore) ;
-   RETURN result
-END score2code ;
-
-
-(*
-   code2score - the first bit is used to represent a seen forced draw.
-*)
-
-PROCEDURE code2score (result: INTEGER) : INTEGER ;
-BEGIN
-   INC (result, MaxScore) ;
-   IF 0 IN BITSET (result)
-   THEN
-      INCL (searchFlags, forcedraw) ;
-      result := VAL (INTEGER, VAL (BITSET, result) - BITSET {0})
-   END ;
-   DEC (result, MaxScore) ;
-   RETURN result
-END code2score ;
-
-
-(*
    exploreSingleProcessor -
 *)
 
@@ -4132,9 +4149,16 @@ BEGIN
    stop1 ;
    printf ("single processor: ply %d, move %d  topCount %d\n", ply, m, plyPool^[ply].topCount) ;
    *)
+   IF Stress
+   THEN
+      pushBoard (stringBoard (b)) ;
+      executeForward (b, turn, m) ;     (* apply constructor.  *)
+      executeBackward (b, turn, m) ;    (* apply deconstructor.  *)
+      popBoard (stringBoard (b))
+   END ;
    executeForward (b, turn, m) ;
    result := exploreBoard (b, opposite (turn), plyPool^[ply].best) ;
-   plyPool^[ply].best := rememberBest (turn, result, plyPool^[ply].best, m) ;
+   plyPool^[ply].best := rememberBest (ply, turn, result, plyPool^[ply].best, m) ;
    plyPool^[ply].processors[m].result := result ;
    plyPool^[ply].processors[m].pstatus := finished ;
    executeBackward (b, turn, m) ;
@@ -4170,7 +4194,7 @@ BEGIN
       DEC (plyPool^[ply].no) ;
       Assert (plyPool^[ply].processors[pix].childPid = pid) ;
       plyPool^[ply].processors[pix].result := result ;
-      plyPool^[ply].best := rememberBest (plyPool^[ply].plyTurn, result, plyPool^[ply].best, plyPool^[ply].processors[pix].move) ;
+      plyPool^[ply].best := rememberBest (ply, plyPool^[ply].plyTurn, result, plyPool^[ply].best, plyPool^[ply].processors[pix].move) ;
       IF debugMultiProc
       THEN
          printf ("end while\n")
@@ -5212,10 +5236,10 @@ END loadBoard ;
 
 
 (*
-   makeNextMove - make a move on the side of, turn, on the currentBoard.
+   performMakeNextMove - 
 *)
 
-PROCEDURE makeNextMove ;
+PROCEDURE performMakeNextMove ;
 VAR
    score: INTEGER ;
    newpc: HeapRange ;
@@ -5300,7 +5324,27 @@ BEGIN
          printf ("a draw\n")
       END
    END ;
-   restoreFrame (fd)
+   restoreFrame (fd)   
+END performMakeNextMove ;
+
+
+(*
+   makeNextMove - make a move on the side of, turn, on the currentBoard.
+*)
+
+PROCEDURE makeNextMove ;
+BEGIN
+   IF inCheck (currentBoard, opposite (turn))
+   THEN
+      IF turn = white
+      THEN
+         printf ("black king is already in check, cannot make a move\n")
+      ELSE
+         printf ("white king is already in check, cannot make a move\n")
+      END
+   ELSE
+      performMakeNextMove
+   END
 END makeNextMove ;
 
 
@@ -5345,7 +5389,7 @@ BEGIN
             success := FALSE
          END
       END ;
-      IF EqualArray (w, "+-")
+      IF EqualArray (w, "w++")
       THEN
          IF NOT (forcewhitewin IN searchFlags)
          THEN
@@ -5353,11 +5397,29 @@ BEGIN
             success := FALSE
          END
       END ;
-      IF EqualArray (w, "-+")
+      IF EqualArray (w, "b++")
       THEN
          IF NOT (forceblackwin IN searchFlags)
          THEN
             printf ("user assert failed: the search did not find a forced win for black\n") ;
+            success := FALSE
+         END
+      END ;
+      IF EqualArray (w, "w+")
+      THEN
+         IF NOT inCheck (currentBoard, white)
+         THEN
+            printf ("user assert failed: white is not in check in the current board position\n") ;
+            displayBoard (currentBoard) ;            
+            success := FALSE
+         END
+      END ;
+      IF EqualArray (w, "b+")
+      THEN
+         IF NOT inCheck (currentBoard, black)
+         THEN
+            printf ("user assert failed: black is not in check in the current board position\n") ;
+            displayBoard (currentBoard) ;
             success := FALSE
          END
       END ;
@@ -5500,7 +5562,7 @@ BEGIN
    Assert (SIZE (InstructionMove)=2) ;
    Assert (SIZE (InstructionFlags)=2) ;
    (* None, Pawn, Shadow, Knight, Bishop, Rook, Queen, King.  *)
-   pieceValue := PieceValue {0, 2, 0, 6, 6, 10, 18, 0} ;
+   pieceValue := PieceValue {0, 1 * ScalePiece, 0, 3 * ScalePiece, 3 * ScalePiece, 5 * ScalePiece, 9 * ScalePiece, 0} ;
    maxProcessors := multiprocessor.maxProcessors () ;
    colors.red ;
    printf ("%d processor chess engine\n", maxProcessors) ;

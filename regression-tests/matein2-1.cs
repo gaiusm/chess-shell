@@ -18,9 +18,9 @@ PP.....P
 ......NK
 p
 c 1
-m 5
+m 6
 j
 l
 n
-A +-
+A w++
 x

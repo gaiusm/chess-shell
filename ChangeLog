@@ -1,3 +1,10 @@
+2020-03-30      <gaiusmod2@gmail.com>
+
+	* chessBoard.mod:  fixed bug with black squared bishops not being
+	added to the board data structures correctly.  Changed the
+	assertion syntax to use b++ and w++ for black and white win
+	respectively.
+
 2020-03-29      <gaiusmod2@gmail.com>
 
 	* chessBoard.mod:  multiprocessor code rewritten using semaphores

@@ -22,8 +22,5 @@ m 5
 j
 l
 n
-n
-n
-n
-n
+A w++
 x

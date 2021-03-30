@@ -23,7 +23,7 @@ j
 l
 n
 # we should have seen the mate now
-A +-
+A w++
 n
 n
 n

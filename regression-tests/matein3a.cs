@@ -21,7 +21,7 @@ c 1
 m 6
 j
 l
-A +-
+A w++
 n
 n
 n

@@ -27,7 +27,7 @@ e
 j
 n
 # we should have seen the check mate now
-A +-
+A w++
 n
 n
 n

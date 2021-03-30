@@ -4,7 +4,6 @@ d
 #  or 4 half moves
 #
 h
-c 1
 p
 l
 s
@@ -17,7 +16,8 @@ R.......
 ......K.
 ........
 p
-c 1
+V
+c 4
 m 5
 j
 l

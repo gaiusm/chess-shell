@@ -30,5 +30,5 @@ l
 y
 n
 # assert that the win has been seen
-A +-
+A w++
 x
