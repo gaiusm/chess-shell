@@ -3841,12 +3841,13 @@ END encodeSearch ;
 
 
 (*
-   alphaBeta - A move has been applied to board, b, and now it is colour, c,
-               turn to move.  The score of the board is returned.
+   alphaBetaSingle - A move has been applied to board, b, and now it is colour, c,
+                     turn to move.  The score of the board is returned.
+                     The single processor version of alphaBeta.
 *)
 
-PROCEDURE alphaBeta (VAR b: Board; colour: Colour;
-                     pliesLeft: INTEGER; alpha, beta: INTEGER) : INTEGER ;
+PROCEDURE alphaBetaSingle (VAR b: Board; colour: Colour;
+                           pliesLeft: INTEGER; alpha, beta: INTEGER) : INTEGER ;
 VAR
    try    : INTEGER ;
    i,
@@ -3922,7 +3923,7 @@ BEGIN
                   pushBoard (stringBoard (b))
                END ;
                executeForward (b, white, i) ;    (* apply constructor.  *)
-               try := max (alphaBeta (b, black, pliesLeft - 1, alpha, beta), try) ;
+               try := max (alphaBetaSingle (b, black, pliesLeft - 1, alpha, beta), try) ;
                executeBackward (b, white, i) ;    (* apply deconstructor.  *)
                IF Stress
                THEN
@@ -3983,7 +3984,7 @@ BEGIN
                   pushBoard (stringBoard (b))
                END ;
                executeForward (b, black, i) ;    (* apply constructor.  *)
-               try := min (alphaBeta (b, white, pliesLeft - 1, alpha, beta), try) ;
+               try := min (alphaBetaSingle (b, white, pliesLeft - 1, alpha, beta), try) ;
                (* retract the move.  *)
                executeBackward (b, black, i) ;    (* apply deconstructor.  *)
                IF Stress
@@ -4009,19 +4010,261 @@ BEGIN
          RETURN beta   (* the best score for a move Black has found *)
       END
    END
-END alphaBeta ;
+END alphaBetaSingle ;
 
 
 (*
-   exploreBoard - wrap up the arguments and call alphaBeta.
-                  A move has been applied to board, b, and now it is colour, c,
-                  turn to move.  The score of the board is returned.
+   alphaBetaMulti - A move has been applied to board, b, and now it is colour, c,
+                    turn to move.  The score of the board is returned.
+                    The single processor version of alphaBeta.
 *)
 
-PROCEDURE exploreBoard (VAR b: Board; c: Colour; best: INTEGER) : INTEGER ;
+PROCEDURE alphaBetaMulti (VAR b: Board; colour: Colour;
+                          pliesLeft: INTEGER;
+                          alpha, beta: INTEGER;
+                          plyId: plyRange) : INTEGER ;
+VAR
+   try    : INTEGER ;
+   i,
+   movetop: CARDINAL ;
+   fd     : FrameDescriptor ;
 BEGIN
-   RETURN alphaBeta (b, c, maxPlies, MinScore, MaxScore)
+   IF pliesLeft = 0
+   THEN
+      INC (totalMoveCount) ;
+      RETURN b.score
+   ELSIF isDraw (b)
+   THEN
+      (* always choose an earlier draw, otherwise
+         it might always chase an elusive draw.  *)
+      IF colour = white
+      THEN
+         try := 0 - pliesLeft
+      ELSE
+         try := pliesLeft
+      END ;
+      try := try * ScalePly ;
+      RETURN encodeSearch (try, forcedraw)
+   ELSE
+      fd := saveFrame () ;
+      genMoves (b, colour) ;
+      movetop := movePtr ;
+      IF DebugAlphaBeta
+      THEN
+         foreachMoveDo (b, fd.movePtr, movetop, unusedPlyHeap, prettyList)
+      END ;
+      IF colour = white
+      THEN
+         (* white to move.  *)
+         IF fd.movePtr = movetop
+         THEN
+            INC (totalMoveCount) ;
+            (* no move available, work out draw or loss  *)
+            IF inCheck (b, white)
+            THEN
+               (* check mate.  *)
+               restoreFrame (fd) ;
+               IF DebugAlphaBeta
+               THEN
+                  printf ("seen check mate loss for white\n");
+                  displayBoard (b)
+               END ;
+               try := BlackWin - pliesLeft ;  (* always choose an earlier win.  *)
+               try := try * ScalePly ;               
+               RETURN encodeSearch (try, forceblackwin)
+            ELSE
+               restoreFrame (fd) ;
+               try := 0 - pliesLeft ;  (* always choose an earlier draw, otherwise
+                                          it might always chase an elusive draw.  *)
+               try := try * ScalePly ;                                                         
+               RETURN encodeSearch (try, forcedraw)                                          
+            END
+         ELSE
+            i := fd.movePtr ;
+            try := MinScore ;
+            (*
+            IF currentAvailable (plyId) > 1   (*   = moveTop - i  *)
+            THEN
+               (* we can use our available cores and search in parallel.  *)
+               printf ("we could search in parallel during this ply: %d, with %d cores\n", pliesLeft, currentAvailable (plyId));
+            END ;
+            *)
+               WHILE i < movetop DO
+                  INC (totalMoveCount) ;
+                  IF DebugAlphaBeta
+                  THEN
+                     printf ("\nexamining ");
+                     IF prettyMove (b, moves[i].cons) = 0
+                     THEN
+                     END ;
+                     printf ("\n");
+                     displayBoard (b)
+                  END ;
+                  IF Stress
+                  THEN
+                     pushBoard (stringBoard (b))
+                  END ;
+                  executeForward (b, white, i) ;    (* apply constructor.  *)
+                  try := max (alphaBetaMulti (b, black, pliesLeft - 1, alpha, beta, plyId), try) ;
+                  executeBackward (b, white, i) ;    (* apply deconstructor.  *)
+                  IF Stress
+                  THEN
+                     popBoard (stringBoard (b))
+                  END ;
+                  IF try > alpha
+                  THEN
+                     (* found a better move *)
+                     alpha := try
+                  END ;
+                  IF alpha >= beta
+                  THEN
+                     restoreFrame (fd) ;
+                     RETURN try
+                  END ;
+                  INC (i)
+               END
+            (* END *)
+         END ;
+         restoreFrame (fd) ;
+         RETURN try
+      ELSE
+         (* black to move.  *)
+         IF movetop = fd.movePtr
+         THEN
+            INC (totalMoveCount) ;
+            (* no move available, work out draw or loss  *)
+            IF inCheck (b, black)
+            THEN
+               (* check mate.  *)
+               restoreFrame (fd) ;
+               IF DebugAlphaBeta
+               THEN
+                  printf ("seen check mate loss for black\n");
+                  displayBoard (b)
+               END ;
+               try := WhiteWin + pliesLeft ;  (* always choose an earlier win.  *)
+               try := try * ScalePly ;                              
+               RETURN encodeSearch (try, forcewhitewin)
+            ELSE
+               IF DebugAlphaBeta
+               THEN
+                  printf ("seen draw for black\n")
+               END ;
+               restoreFrame (fd) ;
+               try := 0 + pliesLeft ;  (* always choose an earlier draw, otherwise
+                                          it might always chase an elusive draw.  *)
+               try := try * ScalePly ;                                                         
+               RETURN encodeSearch (try, forcedraw)
+            END
+         ELSE
+            i := fd.movePtr ;
+            try := MaxScore ;
+            WHILE i < movetop DO
+               INC (totalMoveCount) ;
+               (* apply move.  *)
+               IF Stress
+               THEN
+                  pushBoard (stringBoard (b))
+               END ;
+               executeForward (b, black, i) ;    (* apply constructor.  *)
+               try := min (alphaBetaMulti (b, white, pliesLeft - 1, alpha, beta, plyId), try) ;
+               (* retract the move.  *)
+               executeBackward (b, black, i) ;    (* apply deconstructor.  *)
+               IF Stress
+               THEN
+                  popBoard (stringBoard (b))
+               END ;
+               IF try < beta
+               THEN
+                  (* found a better move *)
+                  beta := try
+               END ;
+               IF alpha >= beta
+               THEN
+                  (* no point searching further as white would choose
+                     a different previous move *)
+                  restoreFrame (fd) ;
+                  RETURN try
+               END ;
+               INC (i)
+            END
+         END ;
+         restoreFrame (fd) ;
+         RETURN beta   (* the best score for a move Black has found *)
+      END
+   END
+END alphaBetaMulti ;
+
+
+(*
+   currentRunning - plyPoolIndex
+*)
+
+PROCEDURE currentRunning (plyPoolIndex: CARDINAL) : CARDINAL ;
+VAR
+   active: CARDINAL ;
+BEGIN
+   wait (plyPool^[plyPoolIndex].plyMutex) ;
+   active := plyPool^[plyPoolIndex].childrenActive ;
+   signal (plyPool^[plyPoolIndex].plyMutex) ;
+   RETURN active
+END currentRunning ;
+
+
+(*
+   currentAvailable - return the number of free processors.
+*)
+
+PROCEDURE currentAvailable (plyPoolIndex: CARDINAL) : CARDINAL ;
+VAR
+   free: CARDINAL ;
+BEGIN
+   wait (plyPool^[plyPoolIndex].plyMutex) ;
+   IF maxProcessors > plyPool^[plyPoolIndex].childrenActive
+   THEN
+      free := maxProcessors - plyPool^[plyPoolIndex].childrenActive
+   ELSE
+      free := 0
+   END ;
+   signal (plyPool^[plyPoolIndex].plyMutex) ;
+   RETURN free
+END currentAvailable ;
+
+
+(*
+   exploreBoard - 
+*)
+
+PROCEDURE exploreBoard (VAR b: Board; colour: Colour;
+                        pliesLeft: INTEGER; alpha, beta: INTEGER) : INTEGER ;
+BEGIN
+   RETURN 0
 END exploreBoard ;
+
+
+(*
+   exploreBoardAlphaBetaMulti - wrap up the arguments and call alphaBeta.
+                                A move has been applied to board, b, and now it is colour, c,
+                                turn to move.  The score of the board is returned.
+*)
+
+PROCEDURE exploreBoardAlphaBetaMulti (VAR b: Board; c: Colour; best: INTEGER; ply: plyRange) : INTEGER ;
+BEGIN
+   RETURN alphaBetaMulti (b, c, maxPlies, best, MaxScore, ply)
+END exploreBoardAlphaBetaMulti ;
+
+
+(*
+   exploreBoardAlphaBetaSingle - wrap up the arguments and call alphaBeta.
+                                 A move has been applied to board, b, and now it is colour, c,
+                                 turn to move.  The score of the board is returned.
+                                 This is called if we are searching all the moves on a single processor.
+*)
+
+PROCEDURE exploreBoardAlphaBetaSingle (VAR b: Board; c: Colour; best: INTEGER) : INTEGER ;
+BEGIN
+   RETURN alphaBetaSingle (b, c, maxPlies, best, MaxScore)
+END exploreBoardAlphaBetaSingle ;
 
 
 (*
@@ -4157,7 +4400,7 @@ BEGIN
       popBoard (stringBoard (b))
    END ;
    executeForward (b, turn, m) ;
-   result := exploreBoard (b, opposite (turn), plyPool^[ply].best) ;
+   result := exploreBoardAlphaBetaSingle (b, opposite (turn), plyPool^[ply].best) ;
    plyPool^[ply].best := rememberBest (ply, turn, result, plyPool^[ply].best, m) ;
    plyPool^[ply].processors[m].result := result ;
    plyPool^[ply].processors[m].pstatus := finished ;
@@ -4231,6 +4474,7 @@ END putResult ;
 PROCEDURE exploreMultiProcessor (VAR b: Board; m: MoveRange; ply: plyRange) ;
 VAR
    pix   : CARDINAL ;
+   best,
    result,
    pid   : INTEGER ;
 BEGIN
@@ -4266,6 +4510,7 @@ BEGIN
       END ;
       wait (plyPool^[ply].plyMutex) ;
       pix := registerRunning (getpid (), m, ply) ;
+      best := plyPool^[ply].best ;
       signal (plyPool^[ply].plyMutex) ;
       IF debugMultiProc
       THEN
@@ -4273,7 +4518,7 @@ BEGIN
       END ;
       (* the child process does the work.  *)
       executeForward (b, turn, m) ;
-      result := exploreBoard (b, opposite (turn), best) ;
+      result := exploreBoardAlphaBetaMulti (b, opposite (turn), best, ply) ;
       (*
       result := pix ;
       sleep (1) ;

@@ -21,7 +21,7 @@ m 6
 # j
 e
 n
-A w++ =
+A w++
 x
 n
 n

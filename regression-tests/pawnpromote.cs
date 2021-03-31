@@ -21,7 +21,7 @@ m 8
 j
 e
 n
-A w++ =
+A w++
 n
 n
 n

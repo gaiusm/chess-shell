@@ -22,7 +22,7 @@ m 12
 j
 e
 n
-A w++ =
+A w++
 n
 n
 n

@@ -84,7 +84,9 @@ BEGIN
    printf ("y                 : list moves encoded by internal microcode\n");
    printf ("z                 : revert previous move\n");
    printf ("A [=] [w++] [b++] : assert move search discovers forced draw,\n");
-   printf ("                    forced white win and forced black win\n");
+   printf ("                    forced white win and forced black win.\n");
+   printf ("                    The concept of a forced draw is not particularly\n");
+   printf ("                    useful as a higher score move will always be chosen.\n");
    printf ("P inputfile       : push inputfile and read shell commands.\n");
    printf ("                    Input reverts back to the previous file.\n");
    printf ("E echostring      : echostring to the output file or stream.\n");

@@ -1,3 +1,8 @@
+2020-03-31      <gaiusmod2@gmail.com>
+
+	* chessBoard.mod:  changes to separate out the single processor
+	and multiprocessor implementation of AlphaBeta algorithm.
+
 2020-03-30      <gaiusmod2@gmail.com>
 
 	* chessBoard.mod:  fixed bug with black squared bishops not being
