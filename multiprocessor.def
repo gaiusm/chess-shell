@@ -1,4 +1,4 @@
-DEFINITION MODULE multiprocessor ;
+DEFINITION MODULE FOR "C" multiprocessor ;
 
 (*
     Title      : multiprocessor

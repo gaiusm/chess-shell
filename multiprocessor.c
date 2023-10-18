@@ -24,7 +24,7 @@ static unsigned int sem_used;
 
 
 /*
- *
+ *  maxProcessors - return the total number of cores available.
  */
 
 int multiprocessor_maxProcessors (void)
@@ -47,6 +47,10 @@ int multiprocessor_rand (void)
 }
 
 
+/*
+ *  initSem - initialise and return a new semaphore containing value.
+ */
+
 sem_t *multiprocessor_initSem (int value)
 {
   if (sem_used == MAX_SEMAPHORES)
@@ -63,11 +67,19 @@ sem_t *multiprocessor_initSem (int value)
 }
 
 
+/*
+ *  wait - block until a token is available in the semaphore.
+ */
+
 void multiprocessor_wait (sem_t *base_sem)
 {
   sem_wait (base_sem);
 }
 
+
+/*
+ *  signal - gives a single token to the semaphore.
+ */
 
 void multiprocessor_signal (sem_t *base_sem)
 {
@@ -75,11 +87,27 @@ void multiprocessor_signal (sem_t *base_sem)
 }
 
 
+/*
+ *  killSem - deconstructor for the semaphore.
+ */
+
 void multiprocessor_killSem (sem_t *base_sem)
 {
   shmdt (base_sem);
 }
 
+
+/*
+ *  initSharedMemory - initialise the shared memory block of memory.
+ *                     mem_size determines the size of the block
+ *                     the address of the free block of shared memory
+ *                     is returned.  As a by product extra shared
+ *                     memory is allocated which is used by the semaphore
+ *                     data structures.  It allows the user to perform
+ *                     a single shared memory allocation and use it for
+ *                     multiple objects which is required as semaphores
+ *                     also need to be placed in the shared memory region.
+ */
 
 void *multiprocessor_initSharedMemory (unsigned int mem_size)
 {
@@ -105,6 +133,7 @@ void *multiprocessor_initSharedMemory (unsigned int mem_size)
 
 void multiprocessor_adjust (sem_t *base_sem, int value)
 {
+  abort ();  /* --fixme-- remove this function.  */
   while (value < 0)
     {
       multiprocessor_wait (base_sem);

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+srcdir=@srcdir@
+export LD_LIBRARY_PATH=$HOME/opt/lib64:$LD_LIBRARY_PATH
+# gdb --args ./chess-whole ${srcdir}/examples/complexmatin7.cs
+gdb --args ./chess-whole ${srcdir}/examples/matein6.cs

@@ -2,7 +2,7 @@
 #  chess shell test input for a mate in 3 moves
 #  or 6 half moves
 #
-m 8
+m 1
 t 0  # disable time limit
 s
 ....k...
@@ -21,58 +21,3 @@ j
 p
 w
 n
-p
-b
-n
-p
-w
-n
-p
-b
-n
-p
-w
-n
-p
-b
-n
-p
-w
-n
-p
-b
-n
-p
-w
-n
-p
-b
-n
-p
-w
-n
-p
-b
-n
-p
-w
-n
-p
-b
-n
-p
-w
-n
-p
-b
-n
-p
-w
-n
-p
-b
-n
-p
-w
-n
-p

@@ -1,0 +1,59 @@
+DEFINITION MODULE FOR "C" mailbox ;
+
+(*
+    Title      : mailbox
+    Author     : Gaius Mulley
+    System     : GNU Modula-2
+    Date       : Mon Nov  1 11:33:13 2021
+    Revision   : $Version$
+    Description: provides a simple mailbox facility under GNU/Linux.
+*)
+
+FROM SYSTEM IMPORT ADDRESS ;
+EXPORT QUALIFIED Mailbox, init, send, rec, initSharedMemory ;
+
+TYPE
+   Mailbox = ADDRESS ;
+
+
+(*
+   initSharedMemory - initialise the shared memory region once.
+                      It also initialises all mailboxes and returns a
+                      pointer to the start of shared memory which is
+                      mem_size bytes in size.  Note that the shared
+                      memory segment will also contain other data structures
+                      before the pointer address.  The call to init_memory
+                      will call multiprocessor_initSharedMemory to layout
+                      all the shared memory contigeously using one shmat.
+*)
+
+PROCEDURE initSharedMemory (mem_size: CARDINAL) : ADDRESS ;
+
+
+(*
+   init - create a single mailbox which can contain a single triple.
+*)
+
+PROCEDURE init () : Mailbox ;
+
+
+
+(*
+   send - send (result, move_no, positions_explored) to the mailbox mbox.
+*)
+
+PROCEDURE send (mbox: Mailbox;
+                result, move_no, positions_explored: INTEGER) ;
+
+
+
+(*
+   rec - receive (result, move_no, positions_explored) from the
+         mailbox mbox.
+*)
+
+PROCEDURE rec (mbox: Mailbox;
+               VAR result, move_no, positions_explored: INTEGER) ;
+
+
+END mailbox.

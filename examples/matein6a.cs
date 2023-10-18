@@ -1,78 +1,60 @@
+d
 #
 #  chess shell test input for a mate in 3 moves
-#  or 6 half moves
+#  or 6 half moves (plies)
 #
-m 8
-t 0  # disable time limit
+h
+c
+p
+l
 s
-....k...
+......k.
+P.......
+...PK...
 ........
-........
-R....K..
 ........
 ........
 ........
 ........
 p
 # c 1
-c
-m 6
+c 1
+m 8
 j
 p
 w
 n
 p
-b
 n
 p
-w
 n
 p
-b
 n
 p
-w
 n
 p
-b
 n
 p
-w
 n
 p
-b
 n
 p
-w
 n
 p
-b
 n
 p
-w
 n
 p
-b
 n
 p
-w
 n
 p
-b
 n
 p
-w
 n
 p
-b
 n
 p
-w
 n
 p
-b
-n
-p
-w
-n
-p
+x

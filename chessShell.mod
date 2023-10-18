@@ -1,4 +1,4 @@
-(* Copyright (C) 2015-2020 Free Software Foundation, Inc. *)
+(* Copyright (C) 2015-2021 Free Software Foundation, Inc. *)
 (* This file is part of GNU Modula-2.
 
 GNU Modula-2 is free software; you can redistribute it and/or modify it under
@@ -36,7 +36,7 @@ FROM chessBoard IMPORT printBoard, whiteMove, blackMove, loadBoard, toggleDebug,
 FROM DynamicStrings IMPORT String, InitString, ConCatChar, EqualArray, Dup, string, Length,
                            RemoveWhitePrefix, RemoveWhitePostfix, KillString, Index, Slice, Mark, char ;
 
-IMPORT SArgs, colors ;
+IMPORT SArgs, colors, m2config ;
 
 
 VAR
@@ -93,7 +93,7 @@ BEGIN
    printf ("S                 : toggle prompt when stdin is used as input.\n");
    printf ("F                 : toggle prompt when a file is used as input.\n");
    printf ("V                 : verify single and multiprocessor scores are the same.\n");
-   printf ("                  : this option runs the single and multiprocessor search algoriths\n");
+   printf ("                  : this option runs the single and multiprocessor search algorithms\n");
    printf ("                  : and checks that the same score is calculated\n");
    printf ("                  : (there may be multiple moves with the same score though).\n");
 END displayHelp ;
@@ -329,19 +329,25 @@ VAR
    n: CARDINAL ;
    a: ADDRESS ;
 BEGIN
-   IF GetArg (s, 1, i)
+   IF m2config.MULTIPROCESSOR
    THEN
-      n := stoc (i) ;
-      IF n = 0
+      IF GetArg (s, 1, i)
       THEN
-         a := string (i) ;
-         printf ("the processor limit must be a number >= 1 and not %s\n", a)
+         n := stoc (i) ;
+         IF n = 0
+         THEN
+            a := string (i) ;
+            printf ("the processor limit must be a number >= 1 and not %s\n", a)
+         ELSE
+            setMaxProcessors (n)
+         END ;
+         i := KillString (i)
       ELSE
-         setMaxProcessors (n)
-      END ;
-      i := KillString (i)
+         setMaxProcessors (0)
+      END
    ELSE
-      setMaxProcessors (0)
+      printf ("chess-shell configured without multiprocessor support\n") ;
+      setMaxProcessors (1)
    END
 END limitProcessors ;
 
