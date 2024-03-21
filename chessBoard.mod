@@ -249,7 +249,8 @@ TYPE
                         movePtr:  MoveRange ;
                      END ;
 
-   SearchFlags = SET OF (forcewhitewin, forceblackwin, forcedraw, validsearch) ;
+   SearchFlag = (forcewhitewin, forceblackwin, forcedraw, validsearch) ;
+   SearchFlagSet = SET OF SearchFlag ;
 
    PieceValue = ARRAY PieceT OF INTEGER ;
 
@@ -285,7 +286,7 @@ VAR
    maxPlies           : CARDINAL ;  (* how deep should the alphaBeta alg descend.  *)
    stackString        : ARRAY [0..MaxStack] OF String ;
    stackPtr           : CARDINAL ;
-   searchFlags        : SearchFlags ;
+   searchFlags        : SearchFlagSet ;
    pieceValue         : PieceValue ;
    plyPool            : POINTER TO plyArray ;
    topPoolId,
@@ -1709,10 +1710,13 @@ END checkShadowSub ;
 *)
 
 PROCEDURE checkShadowAdd (VAR b: Board; col: Colour; last: BOOLEAN) ;
+VAR
+   xy: CARDINAL8 ;
 BEGIN
+   xy := b.pieces[col].shadowPawn.xy ;
    IF b.pieces[col].nShadowPawn > 1
    THEN
-      addPiece (b, col, b.pieces[col].shadowPawn.xy, last)
+      addPiece (b.square[xy].pix, col, xy, last)
    END
 END checkShadowAdd ;
 
@@ -2376,9 +2380,10 @@ END isPawn ;
    isShadow -
 *)
 
-PROCEDURE isShadow (VAR b: Board; c: Colour; xy: CARDINAL8) : BOOLEAN ;
+PROCEDURE isShadow (VAR b: Board; col: Colour; xy: CARDINAL8) : BOOLEAN ;
 BEGIN
-   RETURN (b.pieces[c].nShadowPawn > 0) AND (b.pieces[c].shadowPawn.xy = xy)
+   RETURN (b.pieces[col].nShadowPawn > 0) AND
+          (b.pieces[col].shadowPawn.xy = xy)
 END isShadow ;
 
 
@@ -3624,7 +3629,7 @@ PROCEDURE printFlags ;
 VAR
    comma: BOOLEAN ;
 BEGIN
-   IF searchFlags # SearchFlags {}
+   IF searchFlags # SearchFlagSet {}
    THEN
       printf ("search flags: ") ;
       comma := FALSE ;
@@ -3913,7 +3918,7 @@ END stop1 ;
    encodeSearch -
 *)
 
-PROCEDURE encodeSearch (result: INTEGER; search: SearchFlags) : INTEGER ;
+PROCEDURE encodeSearch (result: INTEGER; search: SearchFlag) : INTEGER ;
 BEGIN
    CASE search OF
 
@@ -5500,7 +5505,7 @@ BEGIN
                             minScoreColour (turn), maxScoreColour (turn),
                             maxProcessors > 1) ;
    fd := saveFrame () ;
-   searchFlags := SearchFlags {} ;
+   searchFlags := SearchFlagSet {} ;
    genMoves (currentBoard, turn) ;
    plyPool^[topPoolId].bestMove := MaxMoves ;
    plyPool^[topPoolId].best := minScoreColour (turn) ;
